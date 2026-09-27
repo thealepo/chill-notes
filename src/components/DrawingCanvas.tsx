@@ -147,7 +147,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     exportCanvas.height = canvas.height
     const context = exportCanvas.getContext('2d')
     if (!context) return
-    context.fillStyle = '#fffdfb'
+    context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--drawing-paper').trim() || '#fffaf9'
     context.fillRect(0, 0, exportCanvas.width, exportCanvas.height)
     context.drawImage(canvas, 0, 0)
     const link = document.createElement('a')

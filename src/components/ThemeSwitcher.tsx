@@ -14,25 +14,27 @@ const options = [
 
 export function ThemeSwitcher({ value, onChange }: ThemeSwitcherProps) {
   return (
-    <div className="theme-setting">
-      <span className="theme-setting-label" id="theme-setting-label">Appearance</span>
-      <div className="theme-switcher" role="radiogroup" aria-labelledby="theme-setting-label">
+    <fieldset className="theme-setting">
+      <legend className="theme-setting-label">Appearance</legend>
+      <div className="theme-switcher">
         {options.map(({ value: optionValue, label, icon: Icon }) => (
-          <button
+          <label
             key={optionValue}
             className={value === optionValue ? 'active' : ''}
-            type="button"
-            role="radio"
-            aria-checked={value === optionValue}
-            aria-label={`${label} theme`}
             title={`${label} theme`}
-            onClick={() => onChange(optionValue)}
           >
+            <input
+              type="radio"
+              name="theme-preference"
+              value={optionValue}
+              checked={value === optionValue}
+              onChange={() => onChange(optionValue)}
+            />
             <Icon size={14} aria-hidden="true" />
             <span>{label}</span>
-          </button>
+          </label>
         ))}
       </div>
-    </div>
+    </fieldset>
   )
 }
