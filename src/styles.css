@@ -290,6 +290,59 @@ textarea:focus-visible {
   padding-top: 16px;
 }
 
+.theme-setting {
+  padding: 0 3px 12px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid rgba(111, 75, 83, 0.08);
+}
+
+.theme-setting-label {
+  display: block;
+  padding: 0 6px 7px;
+  color: #9b8b8f;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.theme-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(112, 79, 86, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.theme-switcher button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 29px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 7px;
+  color: #8b7a7e;
+  font-size: 9px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-switcher button:hover {
+  color: #6f5058;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.theme-switcher button.active {
+  color: #784c58;
+  background: rgba(255, 253, 251, 0.88);
+  box-shadow: 0 2px 7px rgba(80, 51, 58, 0.08);
+}
+
 .sidebar-link {
   display: flex;
   align-items: center;
