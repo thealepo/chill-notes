@@ -4,7 +4,7 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 
 ## MVP features
 
-- Notion-inspired block editor with paragraphs, headings, quotes, checklists, and slash commands
+- Blank-page block editor with hover controls, drag reordering, Markdown shortcuts, and a filtered slash menu
 - Inline LaTeX with `$...$` and dedicated KaTeX equation blocks
 - Freeform canvas with pen, highlighter, eraser, color and stroke controls
 - Drawing history, automatic local saving, and PNG export
