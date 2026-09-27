@@ -1236,3 +1236,220 @@ textarea:focus-visible {
   .block-actions-menu { position: fixed; right: 10px; bottom: 12px; left: 10px; top: auto; width: auto; }
   .page-tail { padding-left: 25px; }
 }
+
+/* Refined application shell */
+::selection {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
+* {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.app-shell {
+  grid-template-columns: 248px minmax(0, 1fr);
+  background: var(--app-canvas);
+}
+
+.sidebar {
+  padding: 18px 12px 14px;
+  background: var(--sidebar-bg);
+}
+
+.brand-row {
+  min-height: 36px;
+  padding: 0 8px;
+  margin-bottom: 18px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.brand-name {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.new-note-button {
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.new-note-button:hover {
+  box-shadow: var(--shadow-small);
+}
+
+.search-field {
+  height: 38px;
+  margin-bottom: 18px;
+  border-radius: 9px;
+  background: var(--surface-hover);
+}
+
+.sidebar-section-label > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 9px;
+  letter-spacing: 0;
+  background: var(--surface-hover);
+}
+
+.note-item {
+  min-height: 46px;
+  padding: 7px 8px;
+  border-radius: 9px;
+}
+
+.note-icon {
+  flex-basis: 25px;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  font-size: 14px;
+}
+
+.note-item.active {
+  box-shadow: none;
+}
+
+.theme-setting {
+  padding-bottom: 10px;
+}
+
+.profile-card {
+  margin-top: 6px;
+}
+
+.topbar {
+  flex-basis: 54px;
+  min-height: 54px;
+  padding: 0 20px;
+  background: var(--surface-translucent);
+}
+
+.topbar-mode-switcher {
+  border-color: var(--border-subtle);
+  background: var(--surface-hover);
+}
+
+.topbar-mode-switcher button {
+  color: var(--text-muted);
+}
+
+.topbar-mode-switcher button:hover {
+  color: var(--text-primary);
+}
+
+.topbar-mode-switcher button.active {
+  color: var(--accent-text);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-small);
+}
+
+.workspace-scroll {
+  background: linear-gradient(180deg, var(--workspace-start), var(--workspace-end));
+}
+
+.document-column {
+  width: min(760px, calc(100% - 64px));
+  padding-top: 64px;
+}
+
+.page-customize-actions button {
+  color: var(--text-muted);
+}
+
+.page-customize-actions button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.title-input {
+  color: var(--text-heading);
+}
+
+.title-input::placeholder,
+.notion-editor .block-content textarea::placeholder {
+  color: var(--text-placeholder);
+}
+
+.notion-editor .block-content textarea,
+.list-marker {
+  color: var(--text-primary);
+}
+
+.notion-editor .block-handle,
+.notion-editor .block-add,
+.page-tail {
+  color: var(--text-muted);
+}
+
+.notion-editor .block-handle:hover,
+.notion-editor .block-add:hover,
+.block-actions-menu button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.notion-editor .kind-code .block-content,
+.notion-editor .math-preview {
+  border-color: var(--border);
+  background: var(--surface-inset);
+}
+
+.notion-divider {
+  border-top-color: var(--border);
+}
+
+.notion-editor .inline-math-preview,
+.block-actions-menu button {
+  color: var(--text-secondary);
+}
+
+.notion-editor .slash-menu,
+.block-actions-menu {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-large);
+}
+
+.slash-search,
+.slash-footer {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+@media (max-width: 920px) {
+  .app-shell { grid-template-columns: 216px minmax(0, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .topbar { padding-right: 8px; padding-left: 56px; }
+  .document-column,
+  .mode-draw .document-column { padding: 38px 18px 80px; }
+  .title-input { min-height: 50px; font-size: 34px; }
+  .drawing-toolbar { overflow-x: auto; flex-wrap: nowrap; }
+  .history-tools { width: auto; padding-top: 0; border-top: 0; }
+  .canvas-frame { min-height: 330px; }
+}
