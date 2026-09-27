@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
   ChevronDown,
   Command,
+  Copy,
+  Download,
   Feather,
   Heart,
   ImagePlus,
   Menu,
   MoreHorizontal,
   Plus,
+  RotateCcw,
   Search,
   Settings,
   SmilePlus,
+  Trash2,
   X,
 } from 'lucide-react'
 import { DrawingCanvas } from './components/DrawingCanvas'
@@ -22,6 +26,9 @@ import { useTheme } from './hooks/useTheme'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
+
+type NoteView = 'notes' | 'archive'
+type SortOrder = 'updated' | 'title'
 
 function readNotes() {
   try {
@@ -49,12 +56,30 @@ function relativeTime(timestamp: number) {
   return days === 1 ? 'Yesterday' : `${days}d ago`
 }
 
+function blankNote(): Note {
+  return {
+    id: crypto.randomUUID(),
+    title: '',
+    favorite: false,
+    updatedAt: Date.now(),
+    blocks: [{ id: crypto.randomUUID(), kind: 'text', content: '' }],
+  }
+}
+
 export default function App() {
   const [notes, setNotes] = useState<Note[]>(readNotes)
   const [activeId, setActiveId] = useState(() => readNotes()[0]?.id ?? '')
   const [mode, setMode] = useState<EditorMode>(() =>
     new URLSearchParams(window.location.search).get('mode') === 'draw' ? 'draw' : 'type',
   )
+  const [view, setView] = useState<NoteView>('notes')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('updated')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [noteMenuOpen, setNoteMenuOpen] = useState(false)
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
+  const [notice, setNotice] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
@@ -65,45 +90,164 @@ export default function App() {
     const normalized = query.trim().toLowerCase()
     return notes
       .filter((note) => {
+        if (Boolean(note.archived) !== (view === 'archive')) return false
         if (!normalized) return true
         const body = note.blocks.map((block) => block.content).join(' ')
         return `${note.title} ${body}`.toLowerCase().includes(normalized)
       })
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [notes, query])
+      .sort((a, b) => sortOrder === 'title'
+        ? (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note')
+        : b.updatedAt - a.updatedAt)
+  }, [notes, query, sortOrder, view])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes))
   }, [notes])
+
+  useEffect(() => {
+    if (!notice) return
+    const timeout = window.setTimeout(() => setNotice(''), 2400)
+    return () => window.clearTimeout(timeout)
+  }, [notice])
 
   function updateNote(updated: Note) {
     setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)))
   }
 
   function createNote() {
-    const id = crypto.randomUUID()
-    const note: Note = {
-      id,
-      title: '',
-      favorite: false,
-      updatedAt: Date.now(),
-      blocks: [{ id: crypto.randomUUID(), kind: 'text', content: '' }],
-    }
+    const note = blankNote()
     setNotes((current) => [note, ...current])
-    setActiveId(id)
+    setActiveId(note.id)
+    setView('notes')
     setMode('type')
     setSidebarOpen(false)
+    setNoteMenuOpen(false)
+    requestAnimationFrame(() => titleInputRef.current?.focus())
   }
 
   function selectNote(id: string) {
     setActiveId(id)
     setSidebarOpen(false)
+    setNoteMenuOpen(false)
+  }
+
+  function showView(nextView: NoteView) {
+    const nextNote = notes.find((note) => Boolean(note.archived) === (nextView === 'archive'))
+    if (!nextNote && nextView === 'archive') {
+      setNotice('Archive is empty.')
+      setSidebarOpen(false)
+      return
+    }
+    setView(nextView)
+    setQuery('')
+    setSettingsOpen(false)
+    setWorkspaceMenuOpen(false)
+    setSidebarOpen(false)
+    setNotice('')
+    if (nextNote) setActiveId(nextNote.id)
   }
 
   function toggleFavorite() {
     if (!activeNote) return
     updateNote({ ...activeNote, favorite: !activeNote.favorite, updatedAt: Date.now() })
   }
+
+  function duplicateActiveNote() {
+    if (!activeNote) return
+    const duplicate: Note = {
+      ...activeNote,
+      id: crypto.randomUUID(),
+      title: activeNote.title ? `${activeNote.title} copy` : 'Untitled note copy',
+      updatedAt: Date.now(),
+      blocks: activeNote.blocks.map((block) => ({ ...block, id: crypto.randomUUID() })),
+    }
+    setNotes((current) => [duplicate, ...current])
+    setActiveId(duplicate.id)
+    setNoteMenuOpen(false)
+  }
+
+  function toggleArchive() {
+    if (!activeNote) return
+    const archived = !activeNote.archived
+    const updated = { ...activeNote, archived, updatedAt: Date.now() }
+    const nextInView = notes.find((note) => note.id !== activeNote.id && Boolean(note.archived) === (view === 'archive'))
+    updateNote(updated)
+    setNoteMenuOpen(false)
+
+    if (!archived) {
+      setView('notes')
+      return
+    }
+    if (nextInView) {
+      setActiveId(nextInView.id)
+      return
+    }
+    const note = blankNote()
+    setNotes((current) => [note, ...current])
+    setActiveId(note.id)
+    setView('notes')
+  }
+
+  function deleteActiveNote() {
+    if (!activeNote || !window.confirm('Delete this note? This cannot be undone.')) return
+    const remaining = notes.filter((note) => note.id !== activeNote.id)
+    let nextNote = remaining.find((note) => Boolean(note.archived) === (view === 'archive'))
+
+    if (!nextNote && view === 'archive') {
+      setView('notes')
+      nextNote = remaining.find((note) => !note.archived)
+    }
+    if (!nextNote) {
+      nextNote = blankNote()
+      remaining.unshift(nextNote)
+      setView('notes')
+    }
+
+    setNotes(remaining)
+    setActiveId(nextNote.id)
+    setNoteMenuOpen(false)
+  }
+
+  function exportNotes() {
+    const file = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `chill-notes-${new Date().toISOString().slice(0, 10)}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+    setWorkspaceMenuOpen(false)
+  }
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      const typing = target?.matches('input, textarea, [contenteditable="true"]') ?? false
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        return
+      }
+      if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        const note = blankNote()
+        setNotes((current) => [note, ...current])
+        setActiveId(note.id)
+        setView('notes')
+        setMode('type')
+        requestAnimationFrame(() => titleInputRef.current?.focus())
+      }
+      if (event.key === 'Escape') {
+        setNoteMenuOpen(false)
+        setWorkspaceMenuOpen(false)
+        setSettingsOpen(false)
+        setSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [])
 
   if (!activeNote) return null
 
@@ -112,6 +256,7 @@ export default function App() {
       <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open notes">
         <Menu size={20} />
       </button>
+      {notice && <div className="toast" role="status">{notice}</div>}
 
       <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`}>
         <div className="brand-row">
@@ -130,16 +275,24 @@ export default function App() {
 
         <label className="search-field">
           <Search size={16} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your notes" />
+          <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your notes" />
           <span className="key-hint">⌘ K</span>
         </label>
 
         <div className="sidebar-section-label">
           <span>
-            Notes
+            {view === 'archive' ? 'Archive' : 'Notes'}
             <span className="note-count">{visibleNotes.length}</span>
           </span>
-          <button className="bare-button" aria-label="Sort notes"><ChevronDown size={15} /></button>
+          <button
+            className={`bare-button sort-button ${sortOrder === 'title' ? 'alphabetical' : ''}`}
+            onClick={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
+            aria-pressed={sortOrder === 'title'}
+            aria-label={`Sort notes by ${sortOrder === 'updated' ? 'title' : 'last updated'}`}
+            title={`Sorted by ${sortOrder === 'updated' ? 'last updated' : 'title'}`}
+          >
+            <ChevronDown size={15} />
+          </button>
         </div>
 
         <nav className="notes-list" aria-label="Notes">
@@ -157,18 +310,54 @@ export default function App() {
             </button>
           ))}
           {visibleNotes.length === 0 && (
-            <div className="empty-search">No quiet thoughts found.</div>
+            <div className="empty-search">{view === 'archive' ? 'Archive is empty.' : 'No notes found.'}</div>
           )}
         </nav>
 
         <div className="sidebar-footer">
-          <ThemeSwitcher value={themePreference} onChange={setThemePreference} />
-          <button className="sidebar-link"><Archive size={17} />Archive</button>
-          <button className="sidebar-link"><Settings size={17} />Settings</button>
+          <button
+            className={`sidebar-link ${view === 'archive' ? 'active' : ''}`}
+            onClick={() => showView(view === 'archive' ? 'notes' : 'archive')}
+          >
+            {view === 'archive' ? <RotateCcw size={17} /> : <Archive size={17} />}
+            {view === 'archive' ? 'Back to notes' : 'Archive'}
+          </button>
+
+          <div className="sidebar-control">
+            <button
+              className={`sidebar-link ${settingsOpen ? 'active' : ''}`}
+              onClick={() => { setSettingsOpen((current) => !current); setWorkspaceMenuOpen(false) }}
+              aria-expanded={settingsOpen}
+            >
+              <Settings size={17} />Settings
+            </button>
+            {settingsOpen && (
+              <div className="settings-panel" role="dialog" aria-label="Settings">
+                <div className="panel-heading">
+                  <strong>Settings</strong>
+                  <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={15} /></button>
+                </div>
+                <ThemeSwitcher value={themePreference} onChange={setThemePreference} />
+              </div>
+            )}
+          </div>
+
           <div className="profile-card">
             <div className="avatar">AS</div>
-            <div><strong>Alex's space</strong><span>All changes saved</span></div>
-            <MoreHorizontal size={17} />
+            <div><strong>Alex's space</strong><span>Saved locally</span></div>
+            <button
+              className="icon-button profile-menu-button"
+              onClick={() => { setWorkspaceMenuOpen((current) => !current); setSettingsOpen(false) }}
+              aria-label="Workspace options"
+              aria-expanded={workspaceMenuOpen}
+            >
+              <MoreHorizontal size={17} />
+            </button>
+            {workspaceMenuOpen && (
+              <div className="workspace-menu" role="menu">
+                <button onClick={exportNotes} role="menuitem"><Download size={15} />Export all notes</button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -178,7 +367,7 @@ export default function App() {
       <main className="workspace">
         <header className="topbar">
           <div className="breadcrumb">
-            <span>My notes</span><span>/</span><strong>{activeNote.title || 'Untitled note'}</strong>
+            <span>{activeNote.archived ? 'Archive' : 'Notes'}</span><span>/</span><strong>{activeNote.title || 'Untitled note'}</strong>
           </div>
           <div className="topbar-mode-switcher" role="tablist" aria-label="Note mode">
             <button className={mode === 'type' ? 'active' : ''} onClick={() => setMode('type')} role="tab" aria-selected={mode === 'type'}>
@@ -193,10 +382,22 @@ export default function App() {
             <button className="focus-button topbar-focus" onClick={() => setFocusMode((current) => !current)}>
               {focusMode ? 'Leave focus' : 'Focus'}
             </button>
-            <button className={`icon-button ${activeNote.favorite ? 'favorite' : ''}`} onClick={toggleFavorite} aria-label="Favorite note">
+            <button className={`icon-button ${activeNote.favorite ? 'favorite' : ''}`} onClick={toggleFavorite} aria-label={activeNote.favorite ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={activeNote.favorite}>
               <Heart size={18} fill={activeNote.favorite ? 'currentColor' : 'none'} />
             </button>
-            <button className="icon-button" aria-label="More options"><MoreHorizontal size={20} /></button>
+            <button className="icon-button" onClick={() => setNoteMenuOpen((current) => !current)} aria-label="Note options" aria-expanded={noteMenuOpen}>
+              <MoreHorizontal size={20} />
+            </button>
+            {noteMenuOpen && (
+              <div className="note-menu" role="menu">
+                <button onClick={duplicateActiveNote} role="menuitem"><Copy size={15} />Duplicate</button>
+                <button onClick={toggleArchive} role="menuitem">
+                  {activeNote.archived ? <RotateCcw size={15} /> : <Archive size={15} />}
+                  {activeNote.archived ? 'Restore' : 'Archive'}
+                </button>
+                <button className="danger" onClick={deleteActiveNote} role="menuitem"><Trash2 size={15} />Delete</button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -225,6 +426,7 @@ export default function App() {
               </div>
 
               <input
+                ref={titleInputRef}
                 className="title-input"
                 value={activeNote.title}
                 onChange={(event) => updateNote({ ...activeNote, title: event.target.value, updatedAt: Date.now() })}
