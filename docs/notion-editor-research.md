@@ -22,4 +22,3 @@ This feature uses Notion's public editor behavior as a reference while keeping C
 - Bottom-sheet block menus on narrow screens
 
 Rich-text selection across blocks, nesting, embeds, databases, and collaborative editing are intentionally outside this MVP.
-
