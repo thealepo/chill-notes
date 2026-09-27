@@ -3,9 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7eff0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f8f3f2" />
     <meta name="description" content="Chill Notes — a calm place to type, sketch, and think." />
     <title>Chill Notes</title>
+    <script>
+      ;(() => {
+        const storageKey = 'chill-notes-theme'
+        let preference = 'system'
+
+        try {
+          const savedPreference = window.localStorage.getItem(storageKey)
+          if (savedPreference === 'light' || savedPreference === 'dark') {
+            preference = savedPreference
+          }
+        } catch {
+          // Storage can be unavailable in private or restricted browsing contexts.
+        }
+
+        const theme = preference === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference
+
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+        document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#241a22' : '#f8f3f2'
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

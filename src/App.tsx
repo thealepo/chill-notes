@@ -16,7 +16,9 @@ import {
 } from 'lucide-react'
 import { DrawingCanvas } from './components/DrawingCanvas'
 import { NoteEditor } from './components/NoteEditor'
+import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
+import { useTheme } from './hooks/useTheme'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
@@ -56,6 +58,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme()
 
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
   const visibleNotes = useMemo(() => {
@@ -156,6 +159,7 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <ThemeSwitcher value={themePreference} onChange={setThemePreference} />
           <button className="sidebar-link"><Archive size={17} />Archive</button>
           <button className="sidebar-link"><Settings size={17} />Settings</button>
           <div className="profile-card">
