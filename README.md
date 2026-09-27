@@ -1,5 +1,7 @@
 # Chill Notes
 
+[![Quality](https://github.com/thealepo/chill-notes/actions/workflows/quality.yml/badge.svg)](https://github.com/thealepo/chill-notes/actions/workflows/quality.yml)
+
 A calm, rose-toned note-taking app for typing, equations, sketches, and handwritten notes.
 
 ## MVP features
@@ -17,8 +19,8 @@ The theme selector is in the sidebar under **Appearance**. System mode follows O
 ## Run locally
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Use `npm run build` for a production build and `npm run lint` for static checks.
+Run `npm run check` to execute the same lint and production-build checks as CI.
