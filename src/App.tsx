@@ -135,7 +135,10 @@ export default function App() {
         </label>
 
         <div className="sidebar-section-label">
-          <span>Your notes</span>
+          <span>
+            Notes
+            <span className="note-count">{visibleNotes.length}</span>
+          </span>
           <button className="bare-button" aria-label="Sort notes"><ChevronDown size={15} /></button>
         </div>
 
@@ -186,7 +189,7 @@ export default function App() {
             </button>
           </div>
           <div className="topbar-actions">
-            <span className="save-state"><span className="save-dot" />Saved</span>
+            <span className="save-state" role="status"><span className="save-dot" />Saved</span>
             <button className="focus-button topbar-focus" onClick={() => setFocusMode((current) => !current)}>
               {focusMode ? 'Leave focus' : 'Focus'}
             </button>
