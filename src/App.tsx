@@ -5,12 +5,13 @@ import {
   Command,
   Feather,
   Heart,
+  ImagePlus,
   Menu,
   MoreHorizontal,
   Plus,
   Search,
   Settings,
-  Sparkles,
+  SmilePlus,
   X,
 } from 'lucide-react'
 import { DrawingCanvas } from './components/DrawingCanvas'
@@ -23,7 +24,15 @@ const STORAGE_KEY = 'chill-notes-v1'
 function readNotes() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? (JSON.parse(saved) as Note[]) : starterNotes
+    if (!saved) return starterNotes
+    const parsed = JSON.parse(saved) as Note[]
+    return parsed.map((note) => ({
+      ...note,
+      blocks: note.blocks.map((block) => ({
+        ...block,
+        kind: (block.kind as string) === 'heading' ? 'heading2' : block.kind,
+      })),
+    }))
   } catch {
     return starterNotes
   }
@@ -72,7 +81,7 @@ export default function App() {
     const id = crypto.randomUUID()
     const note: Note = {
       id,
-      title: 'Untitled note',
+      title: '',
       favorite: false,
       updatedAt: Date.now(),
       blocks: [{ id: crypto.randomUUID(), kind: 'text', content: '' }],
@@ -164,8 +173,19 @@ export default function App() {
           <div className="breadcrumb">
             <span>My notes</span><span>/</span><strong>{activeNote.title || 'Untitled note'}</strong>
           </div>
+          <div className="topbar-mode-switcher" role="tablist" aria-label="Note mode">
+            <button className={mode === 'type' ? 'active' : ''} onClick={() => setMode('type')} role="tab" aria-selected={mode === 'type'}>
+              <Command size={15} />Type
+            </button>
+            <button className={mode === 'draw' ? 'active' : ''} onClick={() => setMode('draw')} role="tab" aria-selected={mode === 'draw'}>
+              <Feather size={15} />Draw
+            </button>
+          </div>
           <div className="topbar-actions">
             <span className="save-state"><span className="save-dot" />Saved</span>
+            <button className="focus-button topbar-focus" onClick={() => setFocusMode((current) => !current)}>
+              {focusMode ? 'Leave focus' : 'Focus'}
+            </button>
             <button className={`icon-button ${activeNote.favorite ? 'favorite' : ''}`} onClick={toggleFavorite} aria-label="Favorite note">
               <Heart size={18} fill={activeNote.favorite ? 'currentColor' : 'none'} />
             </button>
@@ -174,40 +194,48 @@ export default function App() {
         </header>
 
         <div className="workspace-scroll">
-          <div className="note-page">
-            <div className="note-kicker"><Sparkles size={14} /> a quiet place for your thoughts</div>
-            <input
-              className="title-input"
-              value={activeNote.title}
-              onChange={(event) => updateNote({ ...activeNote, title: event.target.value, updatedAt: Date.now() })}
-              aria-label="Note title"
-              placeholder="Untitled note"
-            />
-
-            <div className="mode-row">
-              <div className="mode-switcher" role="tablist" aria-label="Note mode">
-                <button className={mode === 'type' ? 'active' : ''} onClick={() => setMode('type')} role="tab">
-                  <Command size={16} />Type
-                </button>
-                <button className={mode === 'draw' ? 'active' : ''} onClick={() => setMode('draw')} role="tab">
-                  <Feather size={16} />Draw
-                </button>
+          <div className={`note-page mode-${mode}`}>
+            {activeNote.hasCover && (
+              <div className="page-cover" aria-label="Page cover">
+                <button onClick={() => updateNote({ ...activeNote, hasCover: false, updatedAt: Date.now() })}><X size={14} />Remove cover</button>
               </div>
-              <button className="focus-button" onClick={() => setFocusMode((current) => !current)}>
-                {focusMode ? 'Leave focus' : 'Focus mode'}
-              </button>
-            </div>
-
-            {mode === 'type' ? (
-              <NoteEditor note={activeNote} onChange={updateNote} />
-            ) : (
-              <DrawingCanvas
-                key={activeNote.id}
-                initialDrawing={activeNote.drawing}
-                onChange={(drawing) => updateNote({ ...activeNote, drawing, updatedAt: Date.now() })}
-                noteTitle={activeNote.title}
-              />
             )}
+
+            <div className="document-column">
+              {activeNote.pageIcon && (
+                <button className="page-icon" onClick={() => updateNote({ ...activeNote, pageIcon: undefined, updatedAt: Date.now() })} title="Remove icon" aria-label="Remove page icon">
+                  {activeNote.pageIcon}
+                </button>
+              )}
+
+              <div className="page-customize-actions">
+                {!activeNote.pageIcon && (
+                  <button onClick={() => updateNote({ ...activeNote, pageIcon: '🌸', updatedAt: Date.now() })}><SmilePlus size={14} />Add icon</button>
+                )}
+                {!activeNote.hasCover && (
+                  <button onClick={() => updateNote({ ...activeNote, hasCover: true, updatedAt: Date.now() })}><ImagePlus size={14} />Add cover</button>
+                )}
+              </div>
+
+              <input
+                className="title-input"
+                value={activeNote.title}
+                onChange={(event) => updateNote({ ...activeNote, title: event.target.value, updatedAt: Date.now() })}
+                aria-label="Note title"
+                placeholder="Untitled"
+              />
+
+              {mode === 'type' ? (
+                <NoteEditor note={activeNote} onChange={updateNote} />
+              ) : (
+                <DrawingCanvas
+                  key={activeNote.id}
+                  initialDrawing={activeNote.drawing}
+                  onChange={(drawing) => updateNote({ ...activeNote, drawing, updatedAt: Date.now() })}
+                  noteTitle={activeNote.title}
+                />
+              )}
+            </div>
           </div>
         </div>
       </main>
