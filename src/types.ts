@@ -1,4 +1,15 @@
-export type BlockKind = 'text' | 'heading' | 'quote' | 'checklist' | 'math'
+export type BlockKind =
+  | 'text'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'bullet'
+  | 'numbered'
+  | 'quote'
+  | 'checklist'
+  | 'divider'
+  | 'code'
+  | 'math'
 
 export interface NoteBlock {
   id: string
@@ -13,6 +24,8 @@ export interface Note {
   updatedAt: number
   favorite: boolean
   blocks: NoteBlock[]
+  pageIcon?: string
+  hasCover?: boolean
   drawing?: string
 }
 
