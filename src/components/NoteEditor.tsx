@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import katex from 'katex'
 import {
   Braces,
@@ -90,6 +90,11 @@ function commandMatches(command: BlockCommand, query: string) {
   return haystack.includes(query.toLowerCase())
 }
 
+function autosizeBlock(element: HTMLTextAreaElement) {
+  element.style.height = '0px'
+  element.style.height = `${element.scrollHeight}px`
+}
+
 export function NoteEditor({ note, onChange }: NoteEditorProps) {
   const [focusedBlock, setFocusedBlock] = useState<string | null>(null)
   const [insertMenuBlock, setInsertMenuBlock] = useState<string | null>(null)
@@ -99,13 +104,12 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const blockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     for (const input of Object.values(blockRefs.current)) {
       if (!input) continue
-      input.style.height = 'auto'
-      input.style.height = `${input.scrollHeight}px`
+      autosizeBlock(input)
     }
-  }, [note.id, note.blocks.length])
+  }, [note.id, note.blocks])
 
   function commit(blocks: NoteBlock[]) {
     onChange({ ...note, blocks, updatedAt: Date.now() })
@@ -336,8 +340,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
                   onChange={(event) => {
                     updateBlock(block.id, { content: event.target.value })
                     setMenuIndex(0)
-                    event.target.style.height = 'auto'
-                    event.target.style.height = `${event.target.scrollHeight}px`
+                    autosizeBlock(event.target)
                   }}
                   onFocus={() => setFocusedBlock(block.id)}
                   onBlur={() => window.setTimeout(() => setFocusedBlock(null), 140)}
