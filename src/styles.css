@@ -1086,9 +1086,14 @@ textarea:focus-visible {
   border-radius: 4px;
 }
 
-.notion-editor .kind-quote { margin: 5px 0; }
+.notion-editor .kind-quote {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  margin: 6px 0;
+}
 .notion-editor .kind-quote::after { left: 45px; background: #c77f90; }
 .notion-editor .kind-quote textarea { padding-left: 17px; font-family: inherit; font-size: 16px; font-style: normal; }
+.notion-editor .kind-quote .block-gutter { top: 6px; }
 .notion-editor .quote-mark { display: none; }
 
 .notion-editor .kind-code {
@@ -1107,10 +1112,24 @@ textarea:focus-visible {
   font: 13px/1.65 "SFMono-Regular", Consolas, monospace;
 }
 
-.notion-editor .kind-math { margin: 8px 0; }
+.notion-editor .kind-code .block-gutter { top: 12px; }
+
+.notion-editor .kind-math {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  margin: 10px 0;
+}
 .notion-editor .kind-math textarea { padding-left: 25px; font: 13px/1.6 "SFMono-Regular", Consolas, monospace; }
-.notion-editor .math-sigil { left: 46px; top: 8px; display: grid; place-items: center; width: 21px; height: 21px; }
+.notion-editor .kind-math .block-gutter { top: 5px; }
+.notion-editor .math-sigil { left: 46px; top: 7px; display: grid; place-items: center; width: 21px; height: 21px; }
 .notion-editor .math-preview { min-height: 72px; margin: 3px 0 6px; border-color: #eee3e5; border-radius: 7px; background-color: rgba(252, 248, 247, 0.68); }
+
+.notion-editor .kind-divider {
+  min-height: 34px;
+  margin: 4px 0;
+}
+
+.notion-editor .kind-divider .block-gutter { top: 4px; }
 
 .notion-divider {
   width: 100%;
