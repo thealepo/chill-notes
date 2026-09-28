@@ -1600,3 +1600,22 @@ textarea:focus-visible {
 @media (max-width: 700px) {
   .toast { right: 16px; bottom: 16px; left: 16px; text-align: center; }
 }
+
+/* Interaction polish */
+button:not(:disabled),
+label:has(input[type='radio']),
+input[type='range'] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.notion-editor .block-handle {
+  cursor: grab;
+}
+
+.notion-editor .block-handle:active {
+  cursor: grabbing;
+}
