@@ -1637,6 +1637,17 @@ button:disabled {
   filter: saturate(0.65);
 }
 
+button:focus-visible,
+label:has(input[type='radio']:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .notion-editor .block-handle {
   cursor: grab;
 }
