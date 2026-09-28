@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   Archive,
   ChevronDown,
@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Feather,
+  FileText,
   Heart,
   ImagePlus,
   Menu,
@@ -16,6 +17,7 @@ import {
   Settings,
   SmilePlus,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react'
 import { DrawingCanvas } from './components/DrawingCanvas'
@@ -23,6 +25,12 @@ import { NoteEditor } from './components/NoteEditor'
 import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
+import {
+  markdownFilename,
+  normalizeStoredNotes,
+  noteToMarkdown,
+  parseImportedNotes,
+} from './lib/noteSerialization'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
@@ -35,13 +43,7 @@ function readNotes() {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return starterNotes
     const parsed = JSON.parse(saved) as Note[]
-    return parsed.map((note) => ({
-      ...note,
-      blocks: note.blocks.map((block) => ({
-        ...block,
-        kind: (block.kind as string) === 'heading' ? 'heading2' : block.kind,
-      })),
-    }))
+    return normalizeStoredNotes(parsed)
   } catch {
     return starterNotes
   }
@@ -81,6 +83,7 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
@@ -219,6 +222,53 @@ export default function App() {
     link.click()
     URL.revokeObjectURL(url)
     setWorkspaceMenuOpen(false)
+  }
+
+  function exportActiveNoteAsMarkdown() {
+    if (!activeNote) return
+
+    const file = new Blob([noteToMarkdown(activeNote)], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = markdownFilename(activeNote.title)
+    document.body.append(link)
+    try {
+      link.click()
+    } finally {
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    }
+    setNoteMenuOpen(false)
+    setNotice('Exported this note as Markdown.')
+  }
+
+  function chooseImportFile() {
+    setWorkspaceMenuOpen(false)
+    importInputRef.current?.click()
+  }
+
+  async function importNotes(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) return
+
+    try {
+      const result = parseImportedNotes(await file.text())
+      if (result.notes.length === 0) {
+        setNotice(result.skipped > 0 ? `No valid notes found. Skipped ${result.skipped}.` : 'No notes found to import.')
+        return
+      }
+
+      setNotes((current) => [...result.notes, ...current])
+      const noteLabel = result.notes.length === 1 ? 'note' : 'notes'
+      const skipped = result.skipped > 0 ? ` Skipped ${result.skipped}.` : ''
+      setNotice(`Imported ${result.notes.length} ${noteLabel}.${skipped}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not import that file.')
+    } finally {
+      input.value = ''
+    }
   }
 
   useEffect(() => {
@@ -370,9 +420,18 @@ export default function App() {
             </button>
             {workspaceMenuOpen && (
               <div className="workspace-menu" role="menu">
+                <button onClick={chooseImportFile} role="menuitem"><Upload size={15} />Import notes</button>
                 <button onClick={exportNotes} role="menuitem"><Download size={15} />Export all notes</button>
               </div>
             )}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={importNotes}
+              aria-label="Choose a JSON file to import notes"
+              hidden
+            />
           </div>
         </div>
       </aside>
@@ -405,6 +464,7 @@ export default function App() {
             </button>
             {noteMenuOpen && (
               <div className="note-menu" role="menu">
+                <button onClick={exportActiveNoteAsMarkdown} role="menuitem"><FileText size={15} />Export as Markdown</button>
                 <button onClick={duplicateActiveNote} role="menuitem"><Copy size={15} />Duplicate</button>
                 <button onClick={toggleArchive} role="menuitem">
                   {activeNote.archived ? <RotateCcw size={15} /> : <Archive size={15} />}
