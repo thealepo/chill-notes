@@ -23,6 +23,7 @@ import { NoteEditor } from './components/NoteEditor'
 import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
+import { normalizeStoredNotes } from './lib/noteSerialization'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
@@ -35,13 +36,7 @@ function readNotes() {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return starterNotes
     const parsed = JSON.parse(saved) as Note[]
-    return parsed.map((note) => ({
-      ...note,
-      blocks: note.blocks.map((block) => ({
-        ...block,
-        kind: (block.kind as string) === 'heading' ? 'heading2' : block.kind,
-      })),
-    }))
+    return normalizeStoredNotes(parsed)
   } catch {
     return starterNotes
   }
