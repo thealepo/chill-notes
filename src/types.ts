@@ -26,6 +26,7 @@ export interface Note {
   blocks: NoteBlock[]
   pageIcon?: string
   hasCover?: boolean
+  archived?: boolean
   drawing?: string
 }
 
