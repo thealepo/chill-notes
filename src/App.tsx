@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Feather,
+  FileText,
   Heart,
   ImagePlus,
   Menu,
@@ -24,7 +25,12 @@ import { NoteEditor } from './components/NoteEditor'
 import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
-import { normalizeStoredNotes, parseImportedNotes } from './lib/noteSerialization'
+import {
+  markdownFilename,
+  normalizeStoredNotes,
+  noteToMarkdown,
+  parseImportedNotes,
+} from './lib/noteSerialization'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
@@ -214,6 +220,25 @@ export default function App() {
     link.click()
     URL.revokeObjectURL(url)
     setWorkspaceMenuOpen(false)
+  }
+
+  function exportActiveNoteAsMarkdown() {
+    if (!activeNote) return
+
+    const file = new Blob([noteToMarkdown(activeNote)], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = markdownFilename(activeNote.title)
+    document.body.append(link)
+    try {
+      link.click()
+    } finally {
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    }
+    setNoteMenuOpen(false)
+    setNotice('Exported this note as Markdown.')
   }
 
   function chooseImportFile() {
@@ -424,6 +449,7 @@ export default function App() {
             </button>
             {noteMenuOpen && (
               <div className="note-menu" role="menu">
+                <button onClick={exportActiveNoteAsMarkdown} role="menuitem"><FileText size={15} />Export as Markdown</button>
                 <button onClick={duplicateActiveNote} role="menuitem"><Copy size={15} />Duplicate</button>
                 <button onClick={toggleArchive} role="menuitem">
                   {activeNote.archived ? <RotateCcw size={15} /> : <Archive size={15} />}

@@ -106,3 +106,85 @@ export function parseImportedNotes(source: string): ImportedNotesResult {
 
   return { notes, skipped: parsed.length - notes.length }
 }
+
+function isListBlock(kind: BlockKind): boolean {
+  return kind === 'bullet' || kind === 'numbered' || kind === 'checklist'
+}
+
+function codeFence(content: string): string {
+  const longestRun = Math.max(0, ...(content.match(/`+/g) ?? []).map((run) => run.length))
+  const fence = '`'.repeat(Math.max(3, longestRun + 1))
+  return `${fence}\n${content}\n${fence}`
+}
+
+function renderMarkdownBlock(block: NoteBlock, numberedIndex: number): string {
+  switch (block.kind) {
+    case 'text':
+      return block.content
+    case 'heading1':
+      return `# ${block.content}`
+    case 'heading2':
+      return `## ${block.content}`
+    case 'heading3':
+      return `### ${block.content}`
+    case 'bullet':
+      return `- ${block.content}`
+    case 'numbered':
+      return `${numberedIndex}. ${block.content}`
+    case 'checklist':
+      return `- [${block.checked ? 'x' : ' '}] ${block.content}`
+    case 'quote':
+      return block.content.split('\n').map((line) => line ? `> ${line}` : '>').join('\n')
+    case 'divider':
+      return '---'
+    case 'code':
+      return codeFence(block.content)
+    case 'math':
+      return `$$\n${block.content}\n$$`
+  }
+}
+
+export function noteToMarkdown(note: Note): string {
+  const sections: Array<{ content: string; kind?: BlockKind }> = []
+  const title = note.title.trim()
+  if (title) sections.push({ content: `# ${title}` })
+
+  let numberedIndex = 0
+  for (const block of note.blocks) {
+    numberedIndex = block.kind === 'numbered' ? numberedIndex + 1 : 0
+    const content = renderMarkdownBlock(block, numberedIndex)
+    if (content) sections.push({ content, kind: block.kind })
+  }
+
+  if (note.drawing) {
+    sections.push({ content: '<!-- This note has a drawing that is not included in the Markdown export. -->' })
+  }
+
+  const markdown = sections.reduce((output, section, index) => {
+    if (index === 0) return section.content
+    const previous = sections[index - 1]
+    const compactList = previous.kind && section.kind
+      && isListBlock(previous.kind) && isListBlock(section.kind)
+    return `${output}${compactList ? '\n' : '\n\n'}${section.content}`
+  }, '')
+
+  return markdown ? `${markdown}\n` : ''
+}
+
+export function markdownFilename(title: string): string {
+  let filename = title
+    .normalize('NFKC')
+    .replace(/\p{Cc}|[<>:"/\\|?*]/gu, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/-+/g, '-')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/^[.\s-]+|[.\s-]+$/g, '')
+    .slice(0, 80)
+    .replace(/[.\s]+$/g, '')
+
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(filename)) {
+    filename = `note-${filename}`
+  }
+
+  return `${filename || 'untitled-note'}.md`
+}
