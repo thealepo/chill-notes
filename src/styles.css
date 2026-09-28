@@ -1061,7 +1061,7 @@ textarea:focus-visible {
 .list-marker {
   position: absolute;
   z-index: 2;
-  top: 5px;
+  top: 2px;
   left: 48px;
   width: 20px;
   color: #5e4d52;
@@ -1071,13 +1071,16 @@ textarea:focus-visible {
 }
 
 .numbered-marker { font-size: 14px; }
+.notion-editor .kind-bullet,
+.notion-editor .kind-numbered,
+.notion-editor .kind-checklist { min-height: 32px; }
 .notion-editor .kind-bullet textarea,
 .notion-editor .kind-numbered textarea,
 .notion-editor .kind-checklist textarea { padding-left: 28px; }
 
 .notion-editor .check-button {
   left: 49px;
-  top: 8px;
+  top: 7px;
   width: 17px;
   height: 17px;
   border-radius: 4px;
