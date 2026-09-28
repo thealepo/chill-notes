@@ -1046,13 +1046,17 @@ textarea:focus-visible {
 
 .notion-editor .block-content textarea::placeholder { color: #b9aeb0; }
 
-.notion-editor .kind-heading1,
-.notion-editor .kind-heading2,
-.notion-editor .kind-heading3 { margin-top: 18px; }
+.notion-editor .kind-heading1 { margin: 25px 0 5px; }
+.notion-editor .kind-heading2 { margin: 21px 0 4px; }
+.notion-editor .kind-heading3 { margin: 17px 0 3px; }
 
 .notion-editor .kind-heading1 textarea { font-size: 30px; font-weight: 730; line-height: 1.28; letter-spacing: -0.03em; }
 .notion-editor .kind-heading2 textarea { font-size: 24px; font-weight: 700; line-height: 1.32; letter-spacing: -0.025em; }
 .notion-editor .kind-heading3 textarea { font-size: 19px; font-weight: 680; line-height: 1.42; letter-spacing: -0.015em; }
+
+.notion-editor .kind-heading1 .block-gutter { top: 8px; }
+.notion-editor .kind-heading2 .block-gutter { top: 5px; }
+.notion-editor .kind-heading3 .block-gutter { top: 4px; }
 
 .list-marker {
   position: absolute;
