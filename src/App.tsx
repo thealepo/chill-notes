@@ -74,6 +74,7 @@ export default function App() {
   )
   const [view, setView] = useState<NoteView>('notes')
   const [sortOrder, setSortOrder] = useState<SortOrder>('updated')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [noteMenuOpen, setNoteMenuOpen] = useState(false)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
@@ -91,6 +92,7 @@ export default function App() {
     return notes
       .filter((note) => {
         if (Boolean(note.archived) !== (view === 'archive')) return false
+        if (favoritesOnly && !note.favorite) return false
         if (!normalized) return true
         const body = note.blocks.map((block) => block.content).join(' ')
         return `${note.title} ${body}`.toLowerCase().includes(normalized)
@@ -98,7 +100,7 @@ export default function App() {
       .sort((a, b) => sortOrder === 'title'
         ? (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note')
         : b.updatedAt - a.updatedAt)
-  }, [notes, query, sortOrder, view])
+  }, [favoritesOnly, notes, query, sortOrder, view])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes))
@@ -284,18 +286,29 @@ export default function App() {
             {view === 'archive' ? 'Archive' : 'Notes'}
             <span className="note-count">{visibleNotes.length}</span>
           </span>
-          <button
-            className={`bare-button sort-button ${sortOrder === 'title' ? 'alphabetical' : ''}`}
-            onClick={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
-            aria-pressed={sortOrder === 'title'}
-            aria-label={`Sort notes by ${sortOrder === 'updated' ? 'title' : 'last updated'}`}
-            title={`Sorted by ${sortOrder === 'updated' ? 'last updated' : 'title'}`}
-          >
-            <ChevronDown size={15} />
-          </button>
+          <div className="sidebar-section-actions">
+            <button
+              className={`bare-button favorite-filter ${favoritesOnly ? 'active' : ''}`}
+              onClick={() => setFavoritesOnly((current) => !current)}
+              aria-pressed={favoritesOnly}
+              aria-label={favoritesOnly ? 'Show all notes' : 'Show favorite notes only'}
+              title={favoritesOnly ? 'Showing favorite notes only' : 'Show favorite notes only'}
+            >
+              <Heart size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              className={`bare-button sort-button ${sortOrder === 'title' ? 'alphabetical' : ''}`}
+              onClick={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
+              aria-pressed={sortOrder === 'title'}
+              aria-label={`Sort notes by ${sortOrder === 'updated' ? 'title' : 'last updated'}`}
+              title={`Sorted by ${sortOrder === 'updated' ? 'last updated' : 'title'}`}
+            >
+              <ChevronDown size={15} />
+            </button>
+          </div>
         </div>
 
-        <nav className="notes-list" aria-label="Notes">
+        <nav className="notes-list" aria-label={favoritesOnly ? 'Favorite notes' : 'Notes'}>
           {visibleNotes.map((note) => (
             <button
               key={note.id}
@@ -310,7 +323,9 @@ export default function App() {
             </button>
           ))}
           {visibleNotes.length === 0 && (
-            <div className="empty-search">{view === 'archive' ? 'Archive is empty.' : 'No notes found.'}</div>
+            <div className="empty-search">
+              {favoritesOnly ? 'No favorite notes found.' : view === 'archive' ? 'Archive is empty.' : 'No notes found.'}
+            </div>
           )}
         </nav>
 
