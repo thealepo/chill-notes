@@ -27,12 +27,6 @@ The theme selector is under **Settings → Appearance** in the sidebar. System m
 - Mod+D duplicates a block, Mod+Shift+Arrow moves it, Mod+/ opens block actions
 - `N` creates a note and Mod+K focuses search (Mod is ⌘ on macOS, Ctrl elsewhere)
 
-## Import and export
-
-Open the workspace menu beside **Alex's space** to import a Chill Notes JSON backup or export every note as JSON. Imports are merged with the current workspace and receive fresh note and block IDs, so importing the same backup does not overwrite existing notes.
-
-To export the active note as Markdown, open the note options menu in the top-right corner and choose **Export as Markdown**. Text blocks, headings, lists, checklists, quotes, code, dividers, and equations are converted to Markdown; canvas drawings are intentionally omitted and noted in an HTML comment.
-
 ## Run locally
 
 ```bash
