@@ -1519,6 +1519,236 @@ textarea:focus-visible {
   .canvas-frame { min-height: 330px; }
 }
 
+/* Expanded editable drawing board */
+.drawing-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 10px;
+}
+
+.drawing-tools {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.drawing-tools button {
+  flex: 0 0 auto;
+}
+
+.drawing-toolbar > .toolbar-divider,
+.drawing-toolbar > .toolbar-spacer {
+  display: none;
+}
+
+.drawing-properties {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+
+.paper-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.paper-select select {
+  height: 30px;
+  padding: 0 24px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  color: var(--text-secondary);
+  font: 11px inherit;
+  background: var(--surface-raised);
+}
+
+.paper-select select:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 4px 5px 4px 12px;
+  margin: -5px auto 10px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-small);
+}
+
+.selection-toolbar > span {
+  padding-right: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.selection-toolbar button,
+.canvas-zoom-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 29px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font: 11px inherit;
+  white-space: nowrap;
+  background: transparent;
+  cursor: pointer;
+}
+
+.selection-toolbar button:hover,
+.canvas-zoom-controls button:hover {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.selection-toolbar .danger-action:hover {
+  color: var(--danger);
+}
+
+.canvas-frame {
+  isolation: isolate;
+  background-image: none;
+}
+
+.canvas-frame canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-text-editor {
+  position: absolute;
+  z-index: 4;
+  min-width: 40px;
+  min-height: 34px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: 0;
+  resize: none;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.3;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.canvas-text-editor.text {
+  border-style: dashed;
+}
+
+.canvas-text-editor::placeholder {
+  color: rgba(73, 61, 64, 0.48);
+}
+
+.canvas-zoom-controls {
+  position: absolute;
+  z-index: 3;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-translucent);
+  box-shadow: var(--shadow-small);
+  backdrop-filter: blur(10px);
+}
+
+.canvas-zoom-controls button {
+  width: 29px;
+  padding: 0;
+}
+
+.canvas-zoom-controls .zoom-level {
+  width: 52px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 920px) {
+  .drawing-tools .tool-label {
+    display: none;
+  }
+
+  .drawing-tools button {
+    width: 34px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .drawing-toolbar {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .drawing-tools,
+  .drawing-properties {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .drawing-properties {
+    padding-bottom: 3px;
+  }
+
+  .drawing-toolbar .history-tools {
+    width: 100%;
+    margin: 0;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+  }
+
+  .drawing-toolbar .history-tools .export-button {
+    margin-left: auto;
+  }
+
+  .paper-select > span,
+  .selection-toolbar > span {
+    display: none;
+  }
+
+  .selection-toolbar {
+    margin-right: 0;
+  }
+
+  .canvas-corner-label {
+    display: none;
+  }
+
+  .drawing-tip {
+    align-items: flex-start;
+    padding-right: 4px;
+    padding-left: 4px;
+    text-align: center;
+  }
+}
+
 /* Functional controls */
 .sort-button svg {
   transition: transform 160ms ease;

@@ -25,7 +25,6 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import {
-  createEmptyDrawingScene,
   elementBounds,
   normalizedStroke,
   parseDrawingScene,
