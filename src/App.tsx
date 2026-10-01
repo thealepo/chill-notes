@@ -22,7 +22,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { DrawingBoard } from './components/DrawingBoard'
+import { DrawingCanvas } from './components/DrawingCanvas'
 import { NoteEditor } from './components/NoteEditor'
 import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
@@ -601,7 +601,7 @@ export default function App() {
               {mode === 'type' ? (
                 <NoteEditor key={activeNote.id} note={activeNote} onChange={updateNote} />
               ) : (
-                <DrawingBoard
+                <DrawingCanvas
                   key={activeNote.id}
                   initialDrawing={activeNote.drawing}
                   onChange={(drawing) => updateNote({ ...activeNote, drawing, updatedAt: Date.now() })}
