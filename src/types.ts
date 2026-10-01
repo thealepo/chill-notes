@@ -31,4 +31,15 @@ export interface Note {
 }
 
 export type EditorMode = 'type' | 'draw'
-export type DrawingTool = 'pen' | 'highlighter' | 'eraser'
+export type DrawingTool =
+  | 'select'
+  | 'hand'
+  | 'pen'
+  | 'highlighter'
+  | 'eraser'
+  | 'rectangle'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'text'
+  | 'sticky'

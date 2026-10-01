@@ -25,7 +25,9 @@ const colors = [
   { value: '#bc825d', label: 'Clay' },
 ]
 
-const toolConfig: Record<DrawingTool, { label: string; icon: typeof Pencil }> = {
+type LegacyDrawingTool = Extract<DrawingTool, 'pen' | 'highlighter' | 'eraser'>
+
+const toolConfig: Record<LegacyDrawingTool, { label: string; icon: typeof Pencil }> = {
   pen: { label: 'Pen', icon: Pencil },
   highlighter: { label: 'Highlight', icon: Highlighter },
   eraser: { label: 'Eraser', icon: Eraser },
@@ -248,7 +250,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     <section className="draw-editor" aria-label="Drawing editor">
       <div className="drawing-toolbar">
         <div className="tool-group main-tools" role="group" aria-label="Drawing tool">
-          {(Object.keys(toolConfig) as DrawingTool[]).map((item) => {
+          {(Object.keys(toolConfig) as LegacyDrawingTool[]).map((item) => {
             const Icon = toolConfig[item].icon
             return (
               <button
