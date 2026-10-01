@@ -15,7 +15,17 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 - System-aware light and dark themes with persisted Light, Dark, and System preferences
 - Browser-local persistence with no account required
 
-The theme selector is in the sidebar under **Appearance**. System mode follows OS theme changes live; explicit Light and Dark choices are saved in the browser and applied before the app paints to avoid a theme flash.
+The theme selector is under **Settings → Appearance** in the sidebar. System mode follows OS theme changes live; explicit Light and Dark choices are saved in the browser and applied before the app paints to avoid a theme flash.
+
+## Editing shortcuts
+
+- `/` opens the block menu (arrow keys to navigate, Enter to apply, Esc to close)
+- Markdown prefixes followed by Space (`#`, `##`, `###`, `-`, `1.`, `[]`, `"`) convert a block; `---` then Enter adds a divider
+- Enter splits the block at the cursor (lists continue); Shift+Enter inserts a newline
+- Backspace at the start of a block turns it back into text, or merges a paragraph into the block above
+- Arrow Up/Down at the start/end of a block moves to the neighbouring block
+- Mod+D duplicates a block, Mod+Shift+Arrow moves it, Mod+/ opens block actions
+- `N` creates a note and Mod+K focuses search (Mod is ⌘ on macOS, Ctrl elsewhere)
 
 ## Import and export
 

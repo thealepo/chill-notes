@@ -45,6 +45,12 @@ export function useTheme() {
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
+    // Apply the current preference whenever it changes, including updates that arrive
+    // from another tab via the storage event.
+    const currentTheme = resolveTheme(preference)
+    setResolvedTheme(currentTheme)
+    applyTheme(currentTheme)
+
     function handleSystemChange() {
       if (preference !== 'system') return
       const nextTheme = media.matches ? 'dark' : 'light'
@@ -52,7 +58,6 @@ export function useTheme() {
       applyTheme(nextTheme)
     }
 
-    handleSystemChange()
     media.addEventListener('change', handleSystemChange)
     return () => media.removeEventListener('change', handleSystemChange)
   }, [preference])

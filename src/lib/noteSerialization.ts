@@ -75,16 +75,33 @@ function normalizeImportedNote(value: unknown): Note | null {
 }
 
 export function normalizeLegacyBlockKind(block: NoteBlock): NoteBlock {
-  if ((block.kind as string) !== 'heading') return block
-
-  return { ...block, kind: 'heading2' }
+  const kind = block.kind as string
+  if (kind === 'heading') return { ...block, kind: 'heading2' }
+  if (!BLOCK_KINDS.has(kind as BlockKind)) return { ...block, kind: 'text' }
+  return block
 }
 
-export function normalizeStoredNotes(notes: Note[]): Note[] {
-  return notes.map((note) => ({
-    ...note,
-    blocks: note.blocks.map(normalizeLegacyBlockKind),
-  }))
+/**
+ * Migrates notes read from local storage. Unlike imports, stored notes keep their IDs;
+ * entries without a usable block array are dropped instead of failing the whole read.
+ */
+export function normalizeStoredNotes(value: unknown): Note[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((note): note is Note => (
+      isRecord(note)
+      && typeof note.id === 'string'
+      && Array.isArray(note.blocks)
+      && note.blocks.length > 0
+      && note.blocks.every((block: unknown) => isRecord(block) && typeof block.id === 'string' && typeof block.content === 'string')
+    ))
+    .map((note) => ({
+      ...note,
+      title: typeof note.title === 'string' ? note.title : '',
+      updatedAt: typeof note.updatedAt === 'number' && Number.isFinite(note.updatedAt) ? note.updatedAt : Date.now(),
+      favorite: note.favorite === true,
+      blocks: note.blocks.map(normalizeLegacyBlockKind),
+    }))
 }
 
 export function parseImportedNotes(source: string): ImportedNotesResult {

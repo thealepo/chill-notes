@@ -47,6 +47,13 @@
   --drawing-label: #86566a;
   --brand-start: #c87489;
   --brand-end: #a94f69;
+  --cover-highlight: rgba(255, 245, 248, 0.78);
+  --cover-shade: rgba(178, 111, 137, 0.18);
+  --cover-start: #e9cbd4;
+  --cover-middle: #f5e3e7;
+  --cover-end: #ddbac6;
+  --cover-dots: rgba(255, 255, 255, 0.7);
+  --danger: #a94e65;
   --ink: var(--text-primary);
   --muted: var(--text-secondary);
   --soft-muted: var(--text-muted);
@@ -103,6 +110,13 @@
   --drawing-label: #86566a;
   --brand-start: #d77792;
   --brand-end: #aa4e6b;
+  --cover-highlight: rgba(214, 120, 152, 0.26);
+  --cover-shade: rgba(20, 8, 16, 0.32);
+  --cover-start: #4d2c3c;
+  --cover-middle: #5c3446;
+  --cover-end: #3a2230;
+  --cover-dots: rgba(255, 220, 232, 0.16);
+  --danger: #f09aae;
 }
 
 * {
@@ -766,7 +780,7 @@ textarea:focus-visible {
 .slash-menu { position: absolute; z-index: 30; top: calc(100% + 6px); left: 6px; width: 280px; padding: 8px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-raised); box-shadow: var(--shadow-large); backdrop-filter: blur(15px); }
 .slash-title { padding: 7px 8px 8px; color: var(--text-muted); font-size: 9px; font-weight: 750; letter-spacing: 0.09em; text-transform: uppercase; }
 .slash-menu button { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: 0; border-radius: 9px; text-align: left; background: transparent; cursor: pointer; }
-.slash-menu button.selected, .slash-menu button:hover { background: var(--accent-soft); }
+.slash-menu button.selected { background: var(--accent-soft); }
 .command-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; color: var(--accent-text); background: var(--surface-raised); }
 .slash-menu button > span:nth-child(2) { display: flex; flex-direction: column; gap: 2px; }
 .slash-menu strong { color: var(--text-primary); font-size: 11px; font-weight: 650; }
@@ -904,9 +918,9 @@ textarea:focus-visible {
   width: 100%;
   height: 220px;
   background:
-    radial-gradient(circle at 72% 30%, rgba(255, 245, 248, 0.78), transparent 28%),
-    radial-gradient(circle at 24% 80%, rgba(178, 111, 137, 0.18), transparent 32%),
-    linear-gradient(135deg, #e9cbd4 0%, #f5e3e7 50%, #ddbac6 100%);
+    radial-gradient(circle at 72% 30%, var(--cover-highlight), transparent 28%),
+    radial-gradient(circle at 24% 80%, var(--cover-shade), transparent 32%),
+    linear-gradient(135deg, var(--cover-start) 0%, var(--cover-middle) 50%, var(--cover-end) 100%);
 }
 
 .page-cover::after {
@@ -914,7 +928,7 @@ textarea:focus-visible {
   position: absolute;
   inset: 0;
   opacity: 0.38;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.7) 0.8px, transparent 0.8px);
+  background-image: radial-gradient(var(--cover-dots) 0.8px, transparent 0.8px);
   background-size: 14px 14px;
 }
 
@@ -927,11 +941,11 @@ textarea:focus-visible {
   align-items: center;
   gap: 5px;
   padding: 6px 9px;
-  border: 1px solid rgba(92, 56, 66, 0.12);
+  border: 1px solid var(--border-subtle);
   border-radius: 7px;
-  color: #7b6168;
-  font-size: 10px;
-  background: rgba(255, 253, 251, 0.72);
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: var(--surface-translucent);
   backdrop-filter: blur(10px);
   cursor: pointer;
 }
@@ -1012,7 +1026,8 @@ textarea:focus-visible {
 .notion-editor .editor-block:hover,
 .notion-editor .editor-block:focus-within { background: transparent; }
 
-.notion-editor .editor-block.drag-over::before {
+.notion-editor .editor-block.drop-before::before,
+.notion-editor .editor-block.drop-after::before {
   content: '';
   position: absolute;
   z-index: 4;
@@ -1021,7 +1036,7 @@ textarea:focus-visible {
   left: 44px;
   height: 2px;
   border-radius: 2px;
-  background: #c67689;
+  background: var(--accent);
 }
 
 .block-gutter {
@@ -1115,7 +1130,7 @@ textarea:focus-visible {
   padding-bottom: 3px;
   margin: 6px 0;
 }
-.notion-editor .kind-quote::after { left: 45px; background: #c77f90; }
+.notion-editor .kind-quote::after { left: 45px; background: var(--accent-line); }
 .notion-editor .kind-quote textarea { padding-left: 17px; font-family: inherit; font-size: 16px; font-style: normal; }
 .notion-editor .kind-quote .block-gutter { top: 6px; }
 .notion-editor .quote-mark { display: none; }
@@ -1159,7 +1174,7 @@ textarea:focus-visible {
   width: 100%;
   margin: 15px 0;
   border: 0;
-  border-top: 1px solid #ded2d5;
+  border-top: 1px solid var(--border);
 }
 
 .divider-input {
@@ -1206,7 +1221,7 @@ textarea:focus-visible {
 
 .notion-editor .slash-title { padding-top: 9px; }
 .notion-editor .slash-menu button { min-height: 48px; }
-.no-command-results { padding: 22px 10px; color: #a8959a; font-family: Georgia, serif; font-size: 12px; font-style: italic; text-align: center; }
+.no-command-results { padding: 22px 10px; color: var(--text-muted); font-family: Georgia, serif; font-size: 12px; font-style: italic; text-align: center; }
 .slash-footer { display: flex; gap: 12px; padding: 8px 9px 4px; border-top: 1px solid #f0e7e9; color: #ac9da0; font-size: 8px; }
 
 .block-actions-menu {
@@ -1239,8 +1254,8 @@ textarea:focus-visible {
 }
 
 .block-actions-menu button:hover { background: #f6edef; }
-.block-actions-menu button.danger { color: #a94e65; }
-.block-actions-menu kbd { margin-left: auto; color: #ac9da0; font: 9px "SFMono-Regular", Consolas, monospace; }
+.block-actions-menu button.danger { color: var(--danger); }
+.block-actions-menu kbd { margin-left: auto; color: var(--text-muted); font: 10px "SFMono-Regular", Consolas, monospace; }
 
 .page-tail {
   display: flex;
@@ -1704,4 +1719,178 @@ button:focus:not(:focus-visible) {
 
 .notion-editor .block-handle:active {
   cursor: grabbing;
+}
+
+/* Layout and readability fixes */
+
+/* Keep the top bar (and its note menu) above the page cover and canvas. */
+.topbar {
+  position: relative;
+  z-index: 30;
+  column-gap: 10px;
+}
+
+.topbar .icon-button.is-open {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
+.save-state.is-error {
+  color: var(--danger);
+}
+
+/* Title wraps instead of clipping long names. */
+textarea.title-input {
+  overflow: hidden;
+  resize: none;
+  overflow-wrap: anywhere;
+}
+
+/* Align block text with the title; the gutter controls sit in the left margin. */
+.notion-editor {
+  margin-left: -44px;
+}
+
+.draw-editor {
+  margin-top: 22px;
+}
+
+/* Hide the empty customize row once a note has both an icon and a cover. */
+.page-customize-actions:empty {
+  display: none;
+}
+
+.page-cover + .document-column:not(:has(.page-icon)) {
+  padding-top: 24px;
+}
+
+@media (hover: hover) {
+  .page-cover button {
+    opacity: 0;
+  }
+
+  .page-cover:hover button,
+  .page-cover button:focus-visible {
+    opacity: 1;
+  }
+}
+
+/* Long paragraphs and code must grow rather than be clipped at 300px. */
+.notion-editor .block-content textarea {
+  max-height: none;
+}
+
+.notion-editor .editor-block.drop-after::before {
+  top: auto;
+  bottom: -2px;
+}
+
+.notion-editor .editor-block.is-dragging {
+  opacity: 0.4;
+}
+
+.notion-editor .kind-divider:focus-within .notion-divider {
+  border-top-color: var(--accent-line);
+}
+
+.notion-editor .block-handle[aria-expanded='true'] {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.note-icon.has-emoji {
+  font-size: 15px;
+}
+
+.note-item.active .note-icon.has-emoji {
+  background: var(--accent-soft);
+}
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.note-meta svg {
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+
+/* Drawing canvas */
+.canvas-frame {
+  position: relative;
+}
+
+.canvas-frame .canvas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stroke-preview-slot {
+  display: grid;
+  flex: 0 0 14px;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+/* Readability: lift the smallest UI text to legible sizes. */
+.search-field input { font-size: 13px; }
+.note-title { font-size: 13px; }
+.note-meta { font-size: 11px; }
+.note-count { font-size: 10px; }
+.sidebar-link { font-size: 13px; }
+.profile-card strong { font-size: 12px; }
+.profile-card span { font-size: 10px; }
+.theme-setting-label { font-size: 10px; }
+.theme-switcher label { font-size: 11px; }
+.panel-heading { font-size: 13px; }
+.breadcrumb { font-size: 12px; }
+.save-state { font-size: 11px; }
+.topbar-mode-switcher button { font-size: 12px; }
+.focus-button { font-size: 12px; }
+.workspace-menu button,
+.note-menu button,
+.block-actions-menu button { font-size: 13px; }
+.toast { font-size: 13px; }
+.page-customize-actions button { font-size: 12px; }
+.page-tail { font-size: 12px; }
+.slash-search { font-size: 11px; }
+.slash-title { font-size: 10px; }
+.slash-menu strong { font-size: 13px; }
+.slash-menu small { font-size: 11px; }
+.slash-footer { font-size: 10px; }
+.tool-group button { font-size: 12px; }
+.canvas-corner-label { font-size: 11px; }
+.drawing-tip { font-size: 12px; }
+
+@media (hover: none) {
+  .key-hint { display: none; }
+}
+
+@media (max-width: 920px) {
+  .main-tools .tool-label { display: none; }
+}
+
+@media (max-width: 700px) {
+  /* Mobile stacking: menu button above the top bar, sidebar drawer above both. */
+  .mobile-menu { z-index: 31; }
+  .sidebar { z-index: 40; }
+  .sidebar-scrim { z-index: 35; }
+  /* Focus mode is desktop-only; keep the drawer usable if it was left on. */
+  .focus-mode .sidebar { display: flex; }
+  /* Icon-only mode switcher on narrow screens. */
+  .topbar-mode-switcher button { font-size: 0; }
+
+  .document-column,
+  .mode-draw .document-column { width: 100%; }
+  .page-cover + .document-column { padding-top: 0; }
+  .page-cover + .document-column:not(:has(.page-icon)) { padding-top: 20px; }
+  .notion-editor { margin-left: -18px; }
+
+  .drawing-toolbar { flex-wrap: wrap; overflow: visible; row-gap: 8px; }
+  .toolbar-divider { display: none; }
+  .history-tools { margin-left: auto; }
 }

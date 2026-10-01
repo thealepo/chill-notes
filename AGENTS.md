@@ -27,7 +27,7 @@ npm run check
 npm run preview
 ```
 
-`npm run check` is the standard local verification and runs lint followed by the production build. The build uses TypeScript project references before Vite bundles the app. There is currently no automated test suite. `.github/workflows/quality.yml` is named "Lint and build," but at present it only checks out the repository, sets up Node 22, and runs `npm ci`; do not assume CI executes `npm run check` unless the workflow is extended.
+`npm run check` is the standard local verification and runs lint followed by the production build. The build uses TypeScript project references before Vite bundles the app. There is currently no automated test suite. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
 
 ## Repository map
 
@@ -39,6 +39,7 @@ npm run preview
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
 - `src/lib/noteSerialization.ts` — storage migration, defensive JSON import parsing, Markdown rendering, and safe Markdown filenames.
+- `src/lib/platform.ts` — platform-aware shortcut labels and the shared `downloadFile` helper used by JSON, Markdown, and PNG exports.
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
@@ -56,8 +57,9 @@ All notes are held in `App` state and the entire array is written to local stora
 
 Important persistence behaviors:
 
-- `readNotes()` falls back to `starterNotes` if stored JSON is absent or unreadable.
-- Stored legacy `heading` blocks are migrated to `heading2` by `normalizeStoredNotes`.
+- `readNotes()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
+- `normalizeStoredNotes` drops stored notes without a usable block array, migrates legacy `heading` blocks to `heading2`, and maps unknown block kinds to `text`.
+- Saving is wrapped in `try/catch`; quota or storage failures show a notice and a "Not saved" status instead of crashing.
 - JSON imports must be arrays. Import validation is deliberately defensive and skips malformed notes or blocks.
 - Imported notes and blocks receive new `crypto.randomUUID()` IDs, so imports merge rather than overwrite.
 - A valid imported note must retain at least one valid block.
@@ -70,19 +72,21 @@ When adding a block kind or note field, update all relevant surfaces together: T
 
 The block editor is controlled: every edit calls `onChange` with a new note and refreshes `updatedAt`. Keep updates immutable.
 
-- Typing `/` filters the command menu; arrow keys navigate and Enter applies the selected command.
+- Typing `/` filters the command menu; arrow keys navigate, Enter applies the selected command, and Escape dismisses it. The `+` gutter button inserts a new block containing `/`. "Turn into…" reuses the same menu without clearing content.
 - Markdown prefixes followed by Space convert text blocks into headings, lists, checklists, or quotes. Typing `---` then Enter creates a divider.
-- Enter creates a following block, continuing list kinds; Shift+Enter inserts a newline.
-- Enter on an empty structural block converts it to text. Backspace on an empty non-text block converts it to text; on an empty text block it removes the block, except that a note always keeps at least one block.
+- Enter creates a following block, continuing list kinds, and splits text-like blocks at the caret; Shift+Enter inserts a newline.
+- Enter on an empty structural block converts it to text. Backspace at the start of a non-text block converts it to text; on an empty text block it removes the block (a note always keeps at least one block); at the start of a non-empty text block it merges into a previous text-like block.
+- Arrow Up/Down at the start/end of a block moves focus to the neighbouring block.
+- Multi-step edits (for example `---` + Enter) must be applied in a single `commit`, because `note` is a prop snapshot and a second commit would overwrite the first.
 - Mod/Ctrl+D duplicates a block, Mod/Ctrl+Shift+Arrow moves it, and Mod/Ctrl+/ opens block actions.
-- Blocks can also be reordered with HTML drag and drop.
+- Blocks can also be reordered with HTML drag and drop; the drop indicator shows before/after based on pointer position, and drag data uses a custom MIME type so textareas do not accept it.
 - Inline `$...$` and `$$...$$` fragments receive a KaTeX preview; math blocks render as display equations. KaTeX output is the only content passed to `dangerouslySetInnerHTML`.
 
-The canvas saves a full image snapshot when a pointer stroke ends. Its in-memory undo history is capped at 30 snapshots and is not persisted separately. `ResizeObserver` resizes the backing canvas and restores the latest image. Be careful with device-pixel-ratio transforms and with asynchronous `Image.onload` restoration.
+The canvas saves a full image snapshot when a pointer stroke ends. Its in-memory undo history is capped at 30 snapshots and is not persisted separately. `ResizeObserver` resizes the backing canvas and restores the latest committed snapshot (kept in a ref), scaled to fit without changing its aspect ratio. Restores are token-guarded so stale `Image.onload` callbacks are ignored. Highlighter strokes are previewed on an overlay canvas as a single path and composited on pointer up. The effect runs once per mount (the component is keyed by note) so saving a stroke does not reload the canvas.
 
 ## UI and accessibility conventions
 
-- Reuse CSS custom properties from the light and dark token sets rather than introducing hard-coded colors. A small group of later Notion-style rules contains hard-coded neutrals; check both themes before expanding that pattern.
+- Reuse CSS custom properties from the light and dark token sets rather than introducing hard-coded colors. A few earlier Notion-style rules still contain hard-coded neutrals that are overridden later; check both themes before expanding that pattern.
 - The responsive breakpoints are primarily 920px and 700px. Verify desktop and narrow/mobile layouts after structural UI changes.
 - Preserve the minimum 320px viewport support and the full-height, internally scrolling app shell.
 - Keep icon-only controls labeled with `aria-label`. Preserve menu/dialog/tab/listbox roles, `aria-expanded`, `aria-selected`, `aria-pressed`, status announcements, focus-visible styling, and reduced-motion behavior.
