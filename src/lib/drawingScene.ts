@@ -88,16 +88,23 @@ function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function signedDimension(value: unknown): number {
+  const dimension = finite(value, 1)
+  if (dimension === 0) return 1
+  return Math.sign(dimension) * Math.max(1, Math.abs(dimension))
+}
+
 function normalizeElement(value: unknown): DrawingElement | null {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string') return null
   if (!DRAWING_TYPES.has(value.type as DrawingElement['type'])) return null
 
+  const preservesDirection = value.type === 'line' || value.type === 'arrow'
   const base: DrawingElementBase = {
     id: value.id,
     x: finite(value.x),
     y: finite(value.y),
-    width: Math.max(1, finite(value.width, 1)),
-    height: Math.max(1, finite(value.height, 1)),
+    width: preservesDirection ? signedDimension(value.width) : Math.max(1, finite(value.width, 1)),
+    height: preservesDirection ? signedDimension(value.height) : Math.max(1, finite(value.height, 1)),
     strokeColor: typeof value.strokeColor === 'string' ? value.strokeColor : '#493d40',
     strokeWidth: Math.max(1, finite(value.strokeWidth, 3)),
     opacity: Math.min(1, Math.max(0.05, finite(value.opacity, 1))),
