@@ -28,6 +28,7 @@ import {
 import {
   DRAWING_SCENE_VERSION,
   elementBounds,
+  elementsForCanvasPaint,
   normalizedStroke,
   parseDrawingSceneResult,
   resizeElementFromBounds,
@@ -358,13 +359,15 @@ function paintScene(
   height: number,
   draft: Draft,
   selectedId: string | null,
+  editingElementId: string | null,
   onImageLoad?: () => void,
 ) {
   drawPaper(context, scene.paper, viewport, width, height)
   context.save()
   context.translate(viewport.x, viewport.y)
   context.scale(viewport.zoom, viewport.zoom)
-  scene.elements.forEach((element) => drawElement(context, element, onImageLoad))
+  elementsForCanvasPaint(scene.elements, editingElementId)
+    .forEach((element) => drawElement(context, element, onImageLoad))
   if (draft?.type === 'stroke' && draft.points.length) {
     drawStroke(context, normalizedStroke(draft.tool, draft.points, draft.color, draft.size))
   } else if (draft?.type === 'shape') {
@@ -483,9 +486,10 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       canvasSize.height,
       draft,
       selectedId,
+      editing?.id ?? null,
       () => setImageVersion((version) => version + 1),
     )
-  }, [canvasSize, draft, imageVersion, scene, selectedId, viewport])
+  }, [canvasSize, draft, editing?.id, imageVersion, scene, selectedId, viewport])
 
   useEffect(() => {
     if (editing) requestAnimationFrame(() => textInputRef.current?.focus())
@@ -1026,6 +1030,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       { x: padding - content.x, y: padding - content.y, zoom: 1 },
       width,
       height,
+      null,
       null,
       null,
     )
