@@ -28,6 +28,7 @@ import {
   elementBounds,
   normalizedStroke,
   parseDrawingScene,
+  resizeElementFromBounds,
   sceneContentBounds,
   serializeDrawingScene,
   topElementAt,
@@ -363,10 +364,6 @@ function paintScene(
   const selected = selectedId ? scene.elements.find((element) => element.id === selectedId) : undefined
   if (selected) drawSelection(context, selected, viewport.zoom)
   context.restore()
-}
-
-function resizedElement(element: DrawingElement, width: number, height: number): DrawingElement {
-  return { ...element, width: Math.max(12, width), height: Math.max(12, height) }
 }
 
 function movedElement(element: DrawingElement, dx: number, dy: number): DrawingElement {
@@ -717,7 +714,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       setLiveScene({
         ...gesture.before,
         elements: gesture.before.elements.map((element) => element.id === gesture.element.id
-          ? resizedElement({ ...gesture.element, x: bounds.x, y: bounds.y }, width, height)
+          ? resizeElementFromBounds(gesture.element, width, height)
           : element),
       })
     } else if (gesture.type === 'erase') {

@@ -44,6 +44,7 @@ npm run preview
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
+- `tests/drawingScene.test.ts` — regression coverage for directional line/arrow parsing and resizing across all four quadrants.
 - `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
