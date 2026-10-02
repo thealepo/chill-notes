@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
 import {
   AlertCircle,
   Archive,
@@ -29,9 +29,12 @@ import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
 import {
   markdownFilename,
-  normalizeStoredNotes,
+  mergeStoredWorkspaces,
+  normalizeStoredWorkspace,
   noteToMarkdown,
   parseImportedNotes,
+  serializeStoredWorkspace,
+  type StoredWorkspace,
 } from './lib/noteSerialization'
 import { downloadFile, modKeyLabel } from './lib/platform'
 import type { EditorMode, Note } from './types'
@@ -42,13 +45,13 @@ const CORRUPT_BACKUP_KEY = 'chill-notes-v1-unreadable-backup'
 type NoteView = 'notes' | 'archive'
 type SortOrder = 'updated' | 'title'
 
-function readNotes(): Note[] {
+function readWorkspace(): StoredWorkspace {
   let saved: string | null = null
   try {
     saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return starterNotes
-    const notes = normalizeStoredNotes(JSON.parse(saved))
-    if (notes.length > 0) return notes
+    if (!saved) return { notes: starterNotes, tombstones: {} }
+    const workspace = normalizeStoredWorkspace(JSON.parse(saved))
+    if (workspace.notes.length > 0) return workspace
   } catch {
     // Fall through to the starter note below.
   }
@@ -58,7 +61,7 @@ function readNotes(): Note[] {
   } catch {
     // Storage may be unavailable or full; nothing else we can do here.
   }
-  return starterNotes
+  return { notes: starterNotes, tombstones: {} }
 }
 
 function relativeTime(timestamp: number) {
@@ -100,7 +103,8 @@ function blankNote(): Note {
 }
 
 export default function App() {
-  const [notes, setNotes] = useState<Note[]>(readNotes)
+  const [workspaceState, setWorkspaceState] = useState<StoredWorkspace>(readWorkspace)
+  const notes = workspaceState.notes
   const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
   const [mode, setMode] = useState<EditorMode>(() =>
     new URLSearchParams(window.location.search).get('mode') === 'draw' ? 'draw' : 'type',
@@ -122,6 +126,13 @@ export default function App() {
   const [focusMode, setFocusMode] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
 
+  function setNotes(update: SetStateAction<Note[]>) {
+    setWorkspaceState((current) => ({
+      ...current,
+      notes: typeof update === 'function' ? update(current.notes) : update,
+    }))
+  }
+
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
   const visibleNotes = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -140,7 +151,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notes))
+      localStorage.setItem(STORAGE_KEY, serializeStoredWorkspace(workspaceState))
       if (saveFailedRef.current) {
         saveFailedRef.current = false
         setSaveFailed(false)
@@ -154,7 +165,31 @@ export default function App() {
         setNotice('Could not save to this browser. Export a backup to keep your changes.')
       }
     }
-  }, [notes])
+  }, [workspaceState])
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== STORAGE_KEY || !event.newValue) return
+      try {
+        const incoming = normalizeStoredWorkspace(JSON.parse(event.newValue))
+        if (incoming.notes.length === 0) return
+        setWorkspaceState((current) => {
+          const merged = mergeStoredWorkspaces(current, incoming)
+          return serializeStoredWorkspace(merged) === serializeStoredWorkspace(current) ? current : merged
+        })
+        setNotice('Synced changes from another tab.')
+      } catch {
+        setNotice('Ignored unreadable changes from another tab.')
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
+  useEffect(() => {
+    if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
+  }, [activeId, notes])
 
   useEffect(() => {
     if (!notice) return
@@ -284,7 +319,14 @@ export default function App() {
       setView('notes')
     }
 
-    setNotes(remaining)
+    const deletedAt = Date.now()
+    setWorkspaceState((current) => ({
+      notes: remaining,
+      tombstones: {
+        ...current.tombstones,
+        [activeNote.id]: Math.max(current.tombstones[activeNote.id] ?? -1, deletedAt),
+      },
+    }))
     setActiveId(nextNote.id)
     setNoteMenuOpen(false)
   }

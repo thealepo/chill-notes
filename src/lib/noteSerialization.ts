@@ -19,6 +19,14 @@ export interface ImportedNotesResult {
   skipped: number
 }
 
+export interface StoredWorkspace {
+  notes: Note[]
+  tombstones: Record<string, number>
+}
+
+const STORED_WORKSPACE_TYPE = 'chill-notes-workspace'
+const STORED_WORKSPACE_VERSION = 1
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -126,6 +134,73 @@ export function normalizeStoredNotes(value: unknown): Note[] {
       }
     })
     .filter((note): note is Note => note !== null)
+}
+
+function normalizeTombstones(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {}
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => (
+    typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0
+  )))
+}
+
+/** Reads both the original notes array and the versioned cross-tab storage envelope. */
+export function normalizeStoredWorkspace(value: unknown): StoredWorkspace {
+  const legacyNotes = Array.isArray(value) ? normalizeStoredNotes(value) : null
+  if (legacyNotes) return { notes: legacyNotes, tombstones: {} }
+  if (
+    !isRecord(value)
+    || value.type !== STORED_WORKSPACE_TYPE
+    || value.version !== STORED_WORKSPACE_VERSION
+    || !Array.isArray(value.notes)
+  ) return { notes: [], tombstones: {} }
+
+  const tombstones = normalizeTombstones(value.tombstones)
+  const notes = normalizeStoredNotes(value.notes).filter((note) => (
+    (tombstones[note.id] ?? -1) < note.updatedAt
+  ))
+  return { notes, tombstones }
+}
+
+function preferredNote(first: Note | undefined, second: Note | undefined): Note | undefined {
+  if (!first) return second
+  if (!second) return first
+  if (first.updatedAt !== second.updatedAt) return first.updatedAt > second.updatedAt ? first : second
+  return JSON.stringify(first) >= JSON.stringify(second) ? first : second
+}
+
+/**
+ * Combines workspaces per note so independent edits from two browser tabs survive.
+ * Deletion timestamps prevent an older tab from resurrecting a removed note.
+ */
+export function mergeStoredWorkspaces(local: StoredWorkspace, incoming: StoredWorkspace): StoredWorkspace {
+  const tombstones = { ...local.tombstones }
+  for (const [id, deletedAt] of Object.entries(incoming.tombstones)) {
+    tombstones[id] = Math.max(tombstones[id] ?? -1, deletedAt)
+  }
+
+  const localNotes = new Map(local.notes.map((note) => [note.id, note]))
+  const incomingNotes = new Map(incoming.notes.map((note) => [note.id, note]))
+  const ids = new Set([...localNotes.keys(), ...incomingNotes.keys()])
+  const notes: Note[] = []
+  for (const id of ids) {
+    const note = preferredNote(localNotes.get(id), incomingNotes.get(id))
+    if (note && (tombstones[id] ?? -1) < note.updatedAt) notes.push(note)
+  }
+  notes.sort((first, second) => second.updatedAt - first.updatedAt || first.id.localeCompare(second.id))
+  return { notes, tombstones }
+}
+
+/** Produces a stable representation so converged tabs do not trigger storage-event loops. */
+export function serializeStoredWorkspace(workspace: StoredWorkspace): string {
+  const tombstones = Object.fromEntries(
+    Object.entries(workspace.tombstones).sort(([first], [second]) => first.localeCompare(second)),
+  )
+  return JSON.stringify({
+    type: STORED_WORKSPACE_TYPE,
+    version: STORED_WORKSPACE_VERSION,
+    notes: workspace.notes,
+    tombstones,
+  })
 }
 
 export function parseImportedNotes(source: string): ImportedNotesResult {
