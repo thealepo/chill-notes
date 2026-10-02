@@ -8,10 +8,11 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 
 - Blank-page block editor with hover controls, drag reordering, Markdown shortcuts, and a filtered slash menu
 - Inline LaTeX with `$...$` and dedicated KaTeX equation blocks
-- Freeform canvas with pen, highlighter, eraser, color and stroke controls
-- Drawing history, automatic local saving, and PNG export
+- Editable vector canvas with pressure-aware pen and highlighter ink, whole-object erasing, shapes, arrows, text, and sticky notes
+- Select, move, resize, duplicate, reorder, pan, zoom, switch paper templates, undo/redo, and export the full board as PNG
 - Multiple searchable notes, favorites, focus mode, and responsive navigation
 - JSON backup import/export and per-note Markdown export
+- Conflict-safe synchronization between open browser tabs
 - System-aware light and dark themes with persisted Light, Dark, and System preferences
 - Browser-local persistence with no account required
 

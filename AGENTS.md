@@ -27,7 +27,7 @@ npm run check
 npm run preview
 ```
 
-`npm run check` is the standard local verification and runs lint followed by the production build. The build uses TypeScript project references before Vite bundles the app. There is currently no automated test suite. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
+`npm run check` is the standard local verification and runs lint, the Node test suite, and the production build. The build uses TypeScript project references before Vite bundles the app. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
 
 ## Repository map
 
@@ -35,14 +35,16 @@ npm run preview
 - `src/main.tsx` — React entry point; imports global CSS and KaTeX CSS.
 - `src/App.tsx` — application shell and top-level state. Owns notes, selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, persistence, note-level import/export, and the type/draw mode switch.
 - `src/components/NoteEditor.tsx` — block editing, slash commands, Markdown shortcuts, keyboard behavior, drag ordering, block actions, and KaTeX previews.
-- `src/components/DrawingCanvas.tsx` — pointer-based canvas tools, resize restoration, local undo/redo history, clearing, autosave callbacks, and PNG export.
+- `src/components/DrawingCanvas.tsx` — editable vector board rendering and interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, history, paper styles, legacy image rendering, and PNG export.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
 - `src/lib/noteSerialization.ts` — storage migration, defensive JSON import parsing, Markdown rendering, and safe Markdown filenames.
+- `src/lib/drawingScene.ts` — versioned vector scene types, defensive parsing, legacy PNG upgrade, stroke normalization, object hit-testing, and content bounds.
 - `src/lib/platform.ts` — platform-aware shortcut labels and the shared `downloadFile` helper used by JSON, Markdown, and PNG exports.
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
+- `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
 - `README.md` — concise user-facing feature and setup documentation.
@@ -53,17 +55,20 @@ Generated directories such as `node_modules`, `dist`, and `.vite`, plus `*.tsbui
 
 `Note` and `NoteBlock` in `src/types.ts` are the source of truth. A note contains its block array plus optional presentation/archive state and an optional canvas data URL. Supported block kinds are text, three heading levels, bullet, numbered, checklist, quote, divider, code, and math.
 
-All notes are held in `App` state and the entire array is written to local storage under `chill-notes-v1` after changes. Theme preference is separate under `chill-notes-theme`; system mode is represented by removing that key. There is no server, router, database, authentication, or network data layer.
+Notes and deletion tombstones are held in `App` state and written as a versioned workspace envelope under `chill-notes-v1` after changes. Theme preference is separate under `chill-notes-theme`; system mode is represented by removing that key. There is no server, router, database, authentication, or network data layer.
 
 Important persistence behaviors:
 
-- `readNotes()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
+- `readWorkspace()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
 - `normalizeStoredNotes` drops stored notes without a usable block array, migrates legacy `heading` blocks to `heading2`, and maps unknown block kinds to `text`.
+- Storage accepts the original notes array and migrates it into a versioned workspace envelope. Open tabs merge notes by `updatedAt`; deterministic same-time conflict handling prevents event loops, and deletion tombstones stop stale tabs from restoring removed notes.
+- Optional stored note fields are rebuilt from validated values instead of being spread into application state. The drawing parser also treats non-string or malformed input as an empty scene.
 - Saving is wrapped in `try/catch`; quota or storage failures show a notice and a "Not saved" status instead of crashing.
 - JSON imports must be arrays. Import validation is deliberately defensive and skips malformed notes or blocks.
 - Imported notes and blocks receive new `crypto.randomUUID()` IDs, so imports merge rather than overwrite.
 - A valid imported note must retain at least one valid block.
-- Drawings are PNG data URLs stored directly on `Note.drawing`, so drawing-heavy workspaces can approach browser local-storage limits.
+- Drawings use a versioned `chill-drawing` JSON scene stored in the existing `Note.drawing` string. Existing PNG data URLs remain valid and are loaded as locked background image elements; the scene is upgraded to JSON when it is next edited.
+- New ink, shapes, text, and sticky notes remain editable vector elements. Embedded legacy PNG backgrounds can still make browser local-storage limits relevant.
 - Markdown export covers typed blocks only. If a note contains a drawing, export adds an HTML comment explaining that the drawing was omitted.
 
 When adding a block kind or note field, update all relevant surfaces together: TypeScript types, editor creation/rendering and shortcuts, import validation/migration, Markdown serialization, duplication behavior, and styles. Consider backward compatibility for already-saved browser data.
@@ -82,7 +87,9 @@ The block editor is controlled: every edit calls `onChange` with a new note and 
 - Blocks can also be reordered with HTML drag and drop; the drop indicator shows before/after based on pointer position, and drag data uses a custom MIME type so textareas do not accept it.
 - Inline `$...$` and `$$...$$` fragments receive a KaTeX preview; math blocks render as display equations. KaTeX output is the only content passed to `dangerouslySetInnerHTML`.
 
-The canvas saves a full image snapshot when a pointer stroke ends. Its in-memory undo history is capped at 30 snapshots and is not persisted separately. `ResizeObserver` resizes the backing canvas and restores the latest committed snapshot (kept in a ref), scaled to fit without changing its aspect ratio. Restores are token-guarded so stale `Image.onload` callbacks are ignored. Highlighter strokes are previewed on an overlay canvas as a single path and composited on pointer up. The effect runs once per mount (the component is keyed by note) so saving a stroke does not reload the canvas.
+The drawing board keeps durable vector scene state separate from transient editor state (active tool, selection, viewport, pointer gesture, and inline text editor). It commits history only when an action finishes, caps in-memory whole-scene history at 60 snapshots, and does not persist history separately. Pointer moves update live state without saving intermediate steps. The high-DPI canvas is fully redrawn from the scene after changes and resize; legacy image elements use an image cache and repaint when loading finishes.
+
+Strokes store pressure plus points normalized to their object bounds, so selection moves and resizing remain vector operations. Selection and eraser hit-testing run in world coordinates. Pan and zoom are viewport-only and never create note history. Paper style is durable. PNG export fits the full content bounds instead of exporting only the visible viewport.
 
 ## UI and accessibility conventions
 
