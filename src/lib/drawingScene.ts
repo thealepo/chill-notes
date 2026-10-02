@@ -1,4 +1,5 @@
 export type DrawingPaper = 'dot' | 'grid' | 'lined' | 'blank'
+export const DRAWING_SCENE_VERSION = 1 as const
 
 export interface DrawingPoint {
   x: number
@@ -55,7 +56,7 @@ export type DrawingElement =
 
 export interface DrawingScene {
   type: 'chill-drawing'
-  version: 1
+  version: typeof DRAWING_SCENE_VERSION
   paper: DrawingPaper
   elements: DrawingElement[]
 }
@@ -151,7 +152,7 @@ function normalizeElement(value: unknown): DrawingElement | null {
 }
 
 export function createEmptyDrawingScene(): DrawingScene {
-  return { type: 'chill-drawing', version: 1, paper: 'dot', elements: [] }
+  return { type: 'chill-drawing', version: DRAWING_SCENE_VERSION, paper: 'dot', elements: [] }
 }
 
 /** Accepts the vector scene format and upgrades the original flattened PNG format. */
@@ -178,7 +179,12 @@ export function parseDrawingScene(value?: unknown): DrawingScene {
 
   try {
     const parsed: unknown = JSON.parse(value)
-    if (!isRecord(parsed) || parsed.type !== 'chill-drawing' || !Array.isArray(parsed.elements)) {
+    if (
+      !isRecord(parsed)
+      || parsed.type !== 'chill-drawing'
+      || parsed.version !== DRAWING_SCENE_VERSION
+      || !Array.isArray(parsed.elements)
+    ) {
       return createEmptyDrawingScene()
     }
     const paper = typeof parsed.paper === 'string' && PAPERS.has(parsed.paper as DrawingPaper)
@@ -186,7 +192,7 @@ export function parseDrawingScene(value?: unknown): DrawingScene {
       : 'dot'
     return {
       type: 'chill-drawing',
-      version: 1,
+      version: DRAWING_SCENE_VERSION,
       paper,
       elements: parsed.elements.map(normalizeElement).filter((element): element is DrawingElement => element !== null),
     }
