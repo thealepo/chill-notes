@@ -795,6 +795,17 @@ textarea:focus-visible {
 
 /* Drawing editor */
 .draw-editor { position: relative; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 .drawing-toolbar { display: flex; align-items: center; gap: 12px; padding: 9px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-translucent); box-shadow: var(--shadow-small); }
 .tool-group { display: flex; align-items: center; gap: 3px; }
 .tool-group button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 9px; border: 0; border-radius: 8px; color: var(--text-secondary); font-size: 10px; background: transparent; cursor: pointer; }
@@ -1668,6 +1679,11 @@ textarea:focus-visible {
 .canvas-frame canvas {
   position: absolute;
   inset: 0;
+}
+
+.canvas-frame canvas:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
 }
 
 .canvas-text-editor {

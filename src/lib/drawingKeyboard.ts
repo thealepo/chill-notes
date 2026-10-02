@@ -38,7 +38,7 @@ export function nextEditableElement(
   if (editableElements.length === 0) return undefined
 
   const selectedIndex = editableElements.findIndex((element) => element.id === selectedId)
-  if (selectedIndex < 0) return direction === 1 ? editableElements[0] : editableElements.at(-1)
+  if (selectedIndex < 0) return direction === 1 ? editableElements[0] : editableElements[editableElements.length - 1]
 
   const nextIndex = (selectedIndex + direction + editableElements.length) % editableElements.length
   return editableElements[nextIndex]

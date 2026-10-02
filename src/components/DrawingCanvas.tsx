@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
@@ -42,6 +42,13 @@ import {
   type DrawingStickyElement,
   type DrawingTextElement,
 } from '../lib/drawingScene'
+import {
+  createKeyboardElement,
+  drawingElementLabel,
+  isKeyboardCreatableTool,
+  moveDrawingElement,
+  nextEditableElement,
+} from '../lib/drawingKeyboard'
 import { downloadFile } from '../lib/platform'
 import type { DrawingTool } from '../types'
 
@@ -368,10 +375,6 @@ function paintScene(
   context.restore()
 }
 
-function movedElement(element: DrawingElement, dx: number, dy: number): DrawingElement {
-  return { ...element, x: element.x + dx, y: element.y + dy }
-}
-
 function safeDrawingFilename(title: string): string {
   return title.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/(^-|-$)/g, '').slice(0, 80) || 'sketch'
 }
@@ -395,10 +398,15 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const gestureRef = useRef<PointerGesture>(null)
   const spacePanningRef = useRef(false)
   const [editing, setEditing] = useState<TextEditingState | null>(null)
+  const [keyboardStatus, setKeyboardStatus] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
+  const keyboardMoveRef = useRef<string | null>(null)
+  const announcementFrameRef = useRef<number | null>(null)
   const [imageVersion, setImageVersion] = useState(0)
+  const keyboardInstructionsId = useId()
+  const keyboardStatusId = useId()
 
   const selectedElement = useMemo(
     () => scene.elements.find((element) => element.id === selectedId),
@@ -418,6 +426,19 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const setLiveDraft = useCallback((next: Draft) => {
     draftRef.current = next
     setDraft(next)
+  }, [])
+
+  const announce = useCallback((message: string) => {
+    if (announcementFrameRef.current !== null) cancelAnimationFrame(announcementFrameRef.current)
+    setKeyboardStatus('')
+    announcementFrameRef.current = requestAnimationFrame(() => {
+      setKeyboardStatus(message)
+      announcementFrameRef.current = null
+    })
+  }, [])
+
+  useEffect(() => () => {
+    if (announcementFrameRef.current !== null) cancelAnimationFrame(announcementFrameRef.current)
   }, [])
 
   const commitScene = useCallback((next: DrawingScene) => {
@@ -487,6 +508,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     commitScene(next)
   }, [commitScene, selectedId])
 
+  const finishKeyboardMove = useCallback(() => {
+    if (!keyboardMoveRef.current) return
+    keyboardMoveRef.current = null
+    commitScene(sceneRef.current)
+  }, [commitScene])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -502,6 +529,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
         return
       }
       if (event.code === 'Space') {
+        if (target !== canvasRef.current) return
         event.preventDefault()
         spacePanningRef.current = true
         return
@@ -574,9 +602,118 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     setEditing({ id: element.id, before })
   }
 
+  function visibleCanvasCenter(): DrawingPoint {
+    const view = viewportRef.current
+    return {
+      x: (canvasSize.width / 2 - view.x) / view.zoom,
+      y: (canvasSize.height / 2 - view.y) / view.zoom,
+      pressure: 0.5,
+    }
+  }
+
+  function cycleKeyboardSelection(direction: -1 | 1) {
+    const next = nextEditableElement(sceneRef.current, selectedId, direction)
+    if (!next) {
+      announce('The canvas has no editable objects.')
+      return
+    }
+    const editableElements = sceneRef.current.elements.filter((element) => element.type !== 'image')
+    const position = editableElements.findIndex((element) => element.id === next.id) + 1
+    setSelectedId(next.id)
+    announce(`${drawingElementLabel(next)} selected, object ${position} of ${editableElements.length}. Use the arrow keys to move it.`)
+  }
+
+  function createObjectFromKeyboard() {
+    if (!isKeyboardCreatableTool(tool)) {
+      announce(tool === 'select'
+        ? 'Press Enter to select the next object, or Shift Enter for the previous object.'
+        : 'Choose Rectangle, Ellipse, Line, Arrow, Text, or Sticky before pressing Enter to create.')
+      return
+    }
+
+    const before = cloneScene(sceneRef.current)
+    const element = createKeyboardElement(tool, {
+      id: crypto.randomUUID(),
+      center: visibleCanvasCenter(),
+      color,
+      size,
+      stickyIndex: sceneRef.current.elements.length,
+    })
+    const next = { ...sceneRef.current, elements: [...sceneRef.current.elements, element] }
+    setSelectedId(element.id)
+
+    if (element.type === 'text' || element.type === 'sticky') {
+      setLiveScene(next)
+      setEditing({ id: element.id, before })
+      announce(`${drawingElementLabel(element)} created at the center of the canvas. Start typing.`)
+      return
+    }
+
+    commitScene(next)
+    announce(`${drawingElementLabel(element)} created and selected at the center of the canvas.`)
+  }
+
+  function nudgeSelected(dx: number, dy: number) {
+    if (!selectedId) {
+      announce('No object selected. Press V, then Enter to select an object.')
+      return
+    }
+    const selected = sceneRef.current.elements.find((element) => element.id === selectedId)
+    if (!selected || selected.type === 'image') return
+    if (!keyboardMoveRef.current) keyboardMoveRef.current = selected.id
+    const next = {
+      ...sceneRef.current,
+      elements: sceneRef.current.elements.map((element) => element.id === selected.id
+        ? moveDrawingElement(element, dx, dy)
+        : element),
+    }
+    setLiveScene(next)
+    const distance = Math.abs(dx || dy)
+    const direction = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down'
+    announce(`${drawingElementLabel(selected)} moved ${distance} pixel${distance === 1 ? '' : 's'} ${direction}.`)
+  }
+
+  function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLCanvasElement>) {
+    if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault()
+      if (tool === 'select') cycleKeyboardSelection(event.shiftKey ? -1 : 1)
+      else createObjectFromKeyboard()
+      return
+    }
+    if (event.key === 'Escape') {
+      if (!selectedId) return
+      event.preventDefault()
+      setSelectedId(null)
+      announce('Object selection cleared.')
+      return
+    }
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      if (!selectedElement || selectedElement.type === 'image') return
+      event.preventDefault()
+      event.stopPropagation()
+      const label = drawingElementLabel(selectedElement)
+      deleteSelected()
+      announce(`${label} deleted.`)
+      return
+    }
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.startsWith('Arrow')) {
+      event.preventDefault()
+      const distance = event.shiftKey ? 10 : 1
+      if (event.key === 'ArrowLeft') nudgeSelected(-distance, 0)
+      if (event.key === 'ArrowRight') nudgeSelected(distance, 0)
+      if (event.key === 'ArrowUp') nudgeSelected(0, -distance)
+      if (event.key === 'ArrowDown') nudgeSelected(0, distance)
+    }
+  }
+
+  function handleCanvasKeyUp(event: React.KeyboardEvent<HTMLCanvasElement>) {
+    if (event.key.startsWith('Arrow')) finishKeyboardMove()
+  }
+
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
     event.preventDefault()
+    event.currentTarget.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = worldPoint(event.clientX, event.clientY, event.pressure)
     const shouldPan = tool === 'hand' || spacePanningRef.current || event.button === 1
@@ -703,7 +840,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       const dy = point.y - gesture.start.y
       setLiveScene({
         ...gesture.before,
-        elements: gesture.before.elements.map((element) => element.id === gesture.element.id ? movedElement(gesture.element, dx, dy) : element),
+        elements: gesture.before.elements.map((element) => element.id === gesture.element.id ? moveDrawingElement(gesture.element, dx, dy) : element),
       })
     } else if (gesture.type === 'resize') {
       const bounds = elementBounds(gesture.element)
@@ -908,6 +1045,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       : tool === 'text' || tool === 'sticky'
         ? 'text'
         : 'crosshair'
+  const activeToolLabel = toolConfig.find((item) => item.tool === tool)?.label ?? tool
 
   if (initialParseRef.current.status === 'unsupported-version') {
     const version = initialParseRef.current.version
@@ -1006,16 +1144,32 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       <div className="canvas-shell">
         <div className="canvas-corner-label"><Sparkles size={13} /> editable freeform space</div>
         <div className="canvas-frame" ref={frameRef}>
+          <p id={keyboardInstructionsId} className="visually-hidden">
+            Focus the canvas, then press V and Enter to select an object. Press Enter again to select the next object, or Shift Enter for the previous object. Use arrow keys to move the selected object and hold Shift to move ten pixels. Press a shape shortcut, then Enter, to create at the center. Press Delete to remove the selected object and Escape to clear the selection.
+          </p>
+          <div id={keyboardStatusId} className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+            {keyboardStatus}
+          </div>
           <canvas
             ref={canvasRef}
+            tabIndex={0}
+            role="application"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={finishGesture}
             onPointerCancel={finishGesture}
             onLostPointerCapture={finishGesture}
+            onKeyDown={handleCanvasKeyDown}
+            onKeyUp={handleCanvasKeyUp}
+            onBlur={() => {
+              finishKeyboardMove()
+              spacePanningRef.current = false
+            }}
             onWheel={handleWheel}
             onContextMenu={(event) => event.preventDefault()}
-            aria-label="Editable drawing canvas"
+            aria-label={`Editable drawing canvas. ${activeToolLabel} tool active.`}
+            aria-describedby={`${keyboardInstructionsId} ${keyboardStatusId}`}
+            aria-keyshortcuts="Enter Shift+Enter ArrowUp ArrowDown ArrowLeft ArrowRight Delete Backspace Escape V H P M E R O L A T S"
             style={{ cursor }}
           />
           {editingElement && (
@@ -1053,7 +1207,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
           </div>
         </div>
       </div>
-      <div className="drawing-tip"><RotateCcw size={14} /> Auto-saved · drag with Hand or Space · Mod+wheel to zoom · Shift constrains shapes</div>
+      <div className="drawing-tip"><RotateCcw size={14} /> Auto-saved · keyboard: V then Enter selects · arrows move · shape key then Enter creates</div>
     </section>
   )
 }
