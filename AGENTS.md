@@ -27,7 +27,7 @@ npm run check
 npm run preview
 ```
 
-`npm run check` is the standard local verification and runs lint followed by the production build. The build uses TypeScript project references before Vite bundles the app. There is currently no automated test suite. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
+`npm run check` is the standard local verification and runs lint, the Node test suite, and the production build. The build uses TypeScript project references before Vite bundles the app. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
 
 ## Repository map
 
@@ -44,6 +44,7 @@ npm run preview
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
+- `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
 - `README.md` — concise user-facing feature and setup documentation.
@@ -58,8 +59,10 @@ All notes are held in `App` state and the entire array is written to local stora
 
 Important persistence behaviors:
 
-- `readNotes()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
+- `readWorkspace()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
 - `normalizeStoredNotes` drops stored notes without a usable block array, migrates legacy `heading` blocks to `heading2`, and maps unknown block kinds to `text`.
+- Storage accepts the original notes array and migrates it into a versioned workspace envelope. Open tabs merge notes by `updatedAt`; deterministic same-time conflict handling prevents event loops, and deletion tombstones stop stale tabs from restoring removed notes.
+- Optional stored note fields are rebuilt from validated values instead of being spread into application state. The drawing parser also treats non-string or malformed input as an empty scene.
 - Saving is wrapped in `try/catch`; quota or storage failures show a notice and a "Not saved" status instead of crashing.
 - JSON imports must be arrays. Import validation is deliberately defensive and skips malformed notes or blocks.
 - Imported notes and blocks receive new `crypto.randomUUID()` IDs, so imports merge rather than overwrite.
