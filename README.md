@@ -44,3 +44,10 @@ npm run dev
 ```
 
 Run `npm run check` to execute the same lint and production-build checks as CI.
+
+## Future Features
+
+- [ ] LLM Integration -- gets specific notes and draws from them to create sample quizzes, answer questions, etc.
+- [ ] Fix the UI bug where when one does a text box it is seen double.
+- [ ] Tighten up the codebase and any unsafe/buggy/unstable code
+- [ ] See how I can make it a mobile app
