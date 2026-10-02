@@ -28,6 +28,14 @@ The theme selector is under **Settings → Appearance** in the sidebar. System m
 - Mod+D duplicates a block, Mod+Shift+Arrow moves it, Mod+/ opens block actions
 - `N` creates a note and Mod+K focuses search (Mod is ⌘ on macOS, Ctrl elsewhere)
 
+## Drawing shortcuts
+
+- Tab to the canvas, then press `V` and Enter to select an object; Enter selects the next object and Shift+Enter selects the previous one
+- Arrow keys move the selected object by one pixel; hold Shift to move it by ten pixels
+- Press `R`, `O`, `L`, `A`, `T`, or `S`, then Enter, to create a rectangle, ellipse, line, arrow, text box, or sticky note at the visible center
+- Delete or Backspace removes the selected object, and Escape clears the selection
+- Mod+Z undoes, Mod+Shift+Z redoes, `+`/`-` zoom, and Space temporarily enables panning while the canvas is focused
+
 ## Run locally
 
 ```bash

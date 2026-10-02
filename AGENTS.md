@@ -36,6 +36,7 @@ npm run preview
 - `src/App.tsx` — application shell and top-level state. Owns notes, selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, persistence, note-level import/export, and the type/draw mode switch.
 - `src/components/NoteEditor.tsx` — block editing, slash commands, Markdown shortcuts, keyboard behavior, drag ordering, block actions, and KaTeX previews.
 - `src/components/DrawingCanvas.tsx` — editable vector board rendering and interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, history, paper styles, legacy image rendering, and PNG export.
+- `src/lib/drawingKeyboard.ts` — pure keyboard-canvas helpers for cycling editable objects, moving selected objects, creating centered elements, and accessible element labels.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
 - `src/lib/noteSerialization.ts` — storage migration, defensive JSON import parsing, Markdown rendering, and safe Markdown filenames.
@@ -45,6 +46,7 @@ npm run preview
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
 - `tests/drawingScene.test.ts` — regression coverage for drawing-version validation and directional line/arrow parsing and resizing across all four quadrants.
+- `tests/drawingKeyboard.test.ts` — regression coverage for keyboard selection order, immutable object movement, and centered object creation.
 - `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
@@ -90,6 +92,8 @@ The block editor is controlled: every edit calls `onChange` with a new note and 
 - Inline `$...$` and `$$...$$` fragments receive a KaTeX preview; math blocks render as display equations. KaTeX output is the only content passed to `dangerouslySetInnerHTML`.
 
 The drawing board keeps durable vector scene state separate from transient editor state (active tool, selection, viewport, pointer gesture, and inline text editor). It commits history only when an action finishes, caps in-memory whole-scene history at 60 snapshots, and does not persist history separately. Pointer moves update live state without saving intermediate steps. The high-DPI canvas is fully redrawn from the scene after changes and resize; legacy image elements use an image cache and repaint when loading finishes.
+
+The canvas is focusable and exposes a keyboard interaction layer. In Select mode, Enter and Shift+Enter cycle forward and backward through editable objects. Arrow keys move the selection by one world-space pixel, Shift+Arrow moves it by ten, and a held key is committed as one history action on keyup. Shape, text, and sticky tools create a default-sized object at the visible canvas center when Enter is pressed. Keep the hidden instructions, live announcements, focus ring, user-facing shortcut documentation, and keyboard helper tests aligned when changing these controls.
 
 Strokes store pressure plus points normalized to their object bounds, so selection moves and resizing remain vector operations. Selection and eraser hit-testing run in world coordinates. Pan and zoom are viewport-only and never create note history. Paper style is durable. PNG export fits the full content bounds instead of exporting only the visible viewport.
 
