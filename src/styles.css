@@ -1594,6 +1594,37 @@ textarea:focus-visible {
   box-shadow: var(--shadow-small);
 }
 
+.drawing-version-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 620px;
+  padding: 18px;
+  margin: 20px auto;
+  border: 1px solid var(--accent-line);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  background: var(--accent-subtle);
+}
+
+.drawing-version-warning > svg {
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+
+.drawing-version-warning strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-heading);
+  font-size: 13px;
+}
+
+.drawing-version-warning p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .selection-toolbar > span {
   padding-right: 7px;
   color: var(--text-muted);

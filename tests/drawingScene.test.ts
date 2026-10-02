@@ -4,6 +4,7 @@ import {
   DRAWING_SCENE_VERSION,
   elementBounds,
   parseDrawingScene,
+  parseDrawingSceneResult,
   resizeElementFromBounds,
   type DrawingShapeElement,
 } from '../src/lib/drawingScene.ts'
@@ -56,6 +57,20 @@ test('drawing parser accepts only the current scene version', () => {
 
     assert.equal(parsed.version, DRAWING_SCENE_VERSION)
     assert.deepEqual(parsed.elements, [])
+  }
+})
+
+test('drawing parser reports unsupported versions so stored data can remain read-only', () => {
+  const future = {
+    ...(JSON.parse(sceneWithShape('arrow', 60, 40)) as Record<string, unknown>),
+    version: DRAWING_SCENE_VERSION + 1,
+  }
+  const result = parseDrawingSceneResult(JSON.stringify(future))
+
+  assert.equal(result.status, 'unsupported-version')
+  assert.deepEqual(result.scene.elements, [])
+  if (result.status === 'unsupported-version') {
+    assert.equal(result.version, DRAWING_SCENE_VERSION + 1)
   }
 })
 

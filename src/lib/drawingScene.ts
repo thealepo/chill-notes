@@ -61,6 +61,10 @@ export interface DrawingScene {
   elements: DrawingElement[]
 }
 
+export type DrawingSceneParseResult =
+  | { status: 'supported'; scene: DrawingScene }
+  | { status: 'unsupported-version'; scene: DrawingScene; version: unknown }
+
 export interface ElementBounds {
   x: number
   y: number
@@ -155,25 +159,30 @@ export function createEmptyDrawingScene(): DrawingScene {
   return { type: 'chill-drawing', version: DRAWING_SCENE_VERSION, paper: 'dot', elements: [] }
 }
 
-/** Accepts the vector scene format and upgrades the original flattened PNG format. */
-export function parseDrawingScene(value?: unknown): DrawingScene {
-  if (typeof value !== 'string' || !value) return createEmptyDrawingScene()
+/** Identifies unsupported scene versions so callers can preserve them without editing. */
+export function parseDrawingSceneResult(value?: unknown): DrawingSceneParseResult {
+  if (typeof value !== 'string' || !value) {
+    return { status: 'supported', scene: createEmptyDrawingScene() }
+  }
   if (value.startsWith('data:image/')) {
     return {
-      ...createEmptyDrawingScene(),
-      elements: [{
-        id: crypto.randomUUID(),
-        type: 'image',
-        source: value,
-        locked: true,
-        x: 0,
-        y: 0,
-        width: 1280,
-        height: 720,
-        strokeColor: 'transparent',
-        strokeWidth: 1,
-        opacity: 1,
-      }],
+      status: 'supported',
+      scene: {
+        ...createEmptyDrawingScene(),
+        elements: [{
+          id: crypto.randomUUID(),
+          type: 'image',
+          source: value,
+          locked: true,
+          x: 0,
+          y: 0,
+          width: 1280,
+          height: 720,
+          strokeColor: 'transparent',
+          strokeWidth: 1,
+          opacity: 1,
+        }],
+      },
     }
   }
 
@@ -182,23 +191,37 @@ export function parseDrawingScene(value?: unknown): DrawingScene {
     if (
       !isRecord(parsed)
       || parsed.type !== 'chill-drawing'
-      || parsed.version !== DRAWING_SCENE_VERSION
       || !Array.isArray(parsed.elements)
     ) {
-      return createEmptyDrawingScene()
+      return { status: 'supported', scene: createEmptyDrawingScene() }
+    }
+    if (parsed.version !== DRAWING_SCENE_VERSION) {
+      return {
+        status: 'unsupported-version',
+        scene: createEmptyDrawingScene(),
+        version: parsed.version,
+      }
     }
     const paper = typeof parsed.paper === 'string' && PAPERS.has(parsed.paper as DrawingPaper)
       ? parsed.paper as DrawingPaper
       : 'dot'
     return {
-      type: 'chill-drawing',
-      version: DRAWING_SCENE_VERSION,
-      paper,
-      elements: parsed.elements.map(normalizeElement).filter((element): element is DrawingElement => element !== null),
+      status: 'supported',
+      scene: {
+        type: 'chill-drawing',
+        version: DRAWING_SCENE_VERSION,
+        paper,
+        elements: parsed.elements.map(normalizeElement).filter((element): element is DrawingElement => element !== null),
+      },
     }
   } catch {
-    return createEmptyDrawingScene()
+    return { status: 'supported', scene: createEmptyDrawingScene() }
   }
+}
+
+/** Accepts the current vector scene format and upgrades the original flattened PNG format. */
+export function parseDrawingScene(value?: unknown): DrawingScene {
+  return parseDrawingSceneResult(value).scene
 }
 
 export function serializeDrawingScene(scene: DrawingScene): string {
