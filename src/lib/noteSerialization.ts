@@ -81,6 +81,22 @@ export function normalizeLegacyBlockKind(block: NoteBlock): NoteBlock {
   return block
 }
 
+function normalizeStoredBlock(value: unknown): NoteBlock | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.content !== 'string') return null
+
+  const rawKind = typeof value.kind === 'string' ? value.kind : 'text'
+  const kind = rawKind === 'heading'
+    ? 'heading2'
+    : BLOCK_KINDS.has(rawKind as BlockKind) ? rawKind as BlockKind : 'text'
+
+  return {
+    id: value.id,
+    kind,
+    content: value.content,
+    ...(kind === 'checklist' ? { checked: value.checked === true } : {}),
+  }
+}
+
 /**
  * Migrates notes read from local storage. Unlike imports, stored notes keep their IDs;
  * entries without a usable block array are dropped instead of failing the whole read.
@@ -88,20 +104,28 @@ export function normalizeLegacyBlockKind(block: NoteBlock): NoteBlock {
 export function normalizeStoredNotes(value: unknown): Note[] {
   if (!Array.isArray(value)) return []
   return value
-    .filter((note): note is Note => (
-      isRecord(note)
-      && typeof note.id === 'string'
-      && Array.isArray(note.blocks)
-      && note.blocks.length > 0
-      && note.blocks.every((block: unknown) => isRecord(block) && typeof block.id === 'string' && typeof block.content === 'string')
-    ))
-    .map((note) => ({
-      ...note,
-      title: typeof note.title === 'string' ? note.title : '',
-      updatedAt: typeof note.updatedAt === 'number' && Number.isFinite(note.updatedAt) ? note.updatedAt : Date.now(),
-      favorite: note.favorite === true,
-      blocks: note.blocks.map(normalizeLegacyBlockKind),
-    }))
+    .map((value): Note | null => {
+      if (!isRecord(value) || typeof value.id !== 'string' || !Array.isArray(value.blocks)) return null
+      const blocks = value.blocks
+        .map(normalizeStoredBlock)
+        .filter((block): block is NoteBlock => block !== null)
+      if (blocks.length === 0) return null
+
+      return {
+        id: value.id,
+        title: typeof value.title === 'string' ? value.title : '',
+        updatedAt: typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) && value.updatedAt >= 0
+          ? value.updatedAt
+          : Date.now(),
+        favorite: value.favorite === true,
+        blocks,
+        ...(typeof value.pageIcon === 'string' ? { pageIcon: value.pageIcon } : {}),
+        ...(typeof value.hasCover === 'boolean' ? { hasCover: value.hasCover } : {}),
+        ...(typeof value.archived === 'boolean' ? { archived: value.archived } : {}),
+        ...(typeof value.drawing === 'string' ? { drawing: value.drawing } : {}),
+      }
+    })
+    .filter((note): note is Note => note !== null)
 }
 
 export function parseImportedNotes(source: string): ImportedNotesResult {

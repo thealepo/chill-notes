@@ -148,8 +148,8 @@ export function createEmptyDrawingScene(): DrawingScene {
 }
 
 /** Accepts the vector scene format and upgrades the original flattened PNG format. */
-export function parseDrawingScene(value?: string): DrawingScene {
-  if (!value) return createEmptyDrawingScene()
+export function parseDrawingScene(value?: unknown): DrawingScene {
+  if (typeof value !== 'string' || !value) return createEmptyDrawingScene()
   if (value.startsWith('data:image/')) {
     return {
       ...createEmptyDrawingScene(),
