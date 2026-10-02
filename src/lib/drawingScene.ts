@@ -188,11 +188,7 @@ export function parseDrawingSceneResult(value?: unknown): DrawingSceneParseResul
 
   try {
     const parsed: unknown = JSON.parse(value)
-    if (
-      !isRecord(parsed)
-      || parsed.type !== 'chill-drawing'
-      || !Array.isArray(parsed.elements)
-    ) {
+    if (!isRecord(parsed) || parsed.type !== 'chill-drawing') {
       return { status: 'supported', scene: createEmptyDrawingScene() }
     }
     if (parsed.version !== DRAWING_SCENE_VERSION) {
@@ -201,6 +197,9 @@ export function parseDrawingSceneResult(value?: unknown): DrawingSceneParseResul
         scene: createEmptyDrawingScene(),
         version: parsed.version,
       }
+    }
+    if (!Array.isArray(parsed.elements)) {
+      return { status: 'supported', scene: createEmptyDrawingScene() }
     }
     const paper = typeof parsed.paper === 'string' && PAPERS.has(parsed.paper as DrawingPaper)
       ? parsed.paper as DrawingPaper

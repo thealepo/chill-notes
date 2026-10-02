@@ -72,6 +72,13 @@ test('drawing parser reports unsupported versions so stored data can remain read
   if (result.status === 'unsupported-version') {
     assert.equal(result.version, DRAWING_SCENE_VERSION + 1)
   }
+
+  const changedFutureSchema = parseDrawingSceneResult(JSON.stringify({
+    type: 'chill-drawing',
+    version: DRAWING_SCENE_VERSION + 1,
+    objects: { shape: { type: 'future-shape' } },
+  }))
+  assert.equal(changedFutureSchema.status, 'unsupported-version')
 })
 
 function shape(type: 'line' | 'arrow', width: number, height: number): DrawingShapeElement {
