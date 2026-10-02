@@ -507,14 +507,15 @@ export default function App() {
               className={`sidebar-link ${settingsOpen ? 'active' : ''}`}
               onClick={() => { setSettingsOpen((current) => !current); setWorkspaceMenuOpen(false); setNoteMenuOpen(false) }}
               aria-expanded={settingsOpen}
+              aria-controls="sidebar-settings"
               data-menu-trigger
             >
               <Settings size={17} />Settings
             </button>
             {settingsOpen && (
-              <div className="settings-panel" role="dialog" aria-label="Settings">
+              <div id="sidebar-settings" className="settings-panel" role="region" aria-labelledby="sidebar-settings-title">
                 <div className="panel-heading">
-                  <strong>Settings</strong>
+                  <strong id="sidebar-settings-title">Settings</strong>
                   <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={15} /></button>
                 </div>
                 <ThemeSwitcher value={themePreference} onChange={setThemePreference} />
