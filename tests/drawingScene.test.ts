@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  DRAWING_SCENE_VERSION,
   elementBounds,
   parseDrawingScene,
+  parseDrawingSceneResult,
   resizeElementFromBounds,
   type DrawingShapeElement,
 } from '../src/lib/drawingScene.ts'
@@ -42,6 +44,41 @@ test('drawing parser preserves arrow direction in every quadrant', () => {
     assert.equal(arrow.width, width)
     assert.equal(arrow.height, height)
   }
+})
+
+test('drawing parser accepts only the current scene version', () => {
+  const current = JSON.parse(sceneWithShape('arrow', 60, 40)) as Record<string, unknown>
+  assert.equal(parseDrawingScene(JSON.stringify(current)).elements.length, 1)
+  assert.equal(parseDrawingScene(JSON.stringify(current)).version, DRAWING_SCENE_VERSION)
+
+  for (const version of [0, 2, '1', null, undefined]) {
+    const candidate = { ...current, version }
+    const parsed = parseDrawingScene(JSON.stringify(candidate))
+
+    assert.equal(parsed.version, DRAWING_SCENE_VERSION)
+    assert.deepEqual(parsed.elements, [])
+  }
+})
+
+test('drawing parser reports unsupported versions so stored data can remain read-only', () => {
+  const future = {
+    ...(JSON.parse(sceneWithShape('arrow', 60, 40)) as Record<string, unknown>),
+    version: DRAWING_SCENE_VERSION + 1,
+  }
+  const result = parseDrawingSceneResult(JSON.stringify(future))
+
+  assert.equal(result.status, 'unsupported-version')
+  assert.deepEqual(result.scene.elements, [])
+  if (result.status === 'unsupported-version') {
+    assert.equal(result.version, DRAWING_SCENE_VERSION + 1)
+  }
+
+  const changedFutureSchema = parseDrawingSceneResult(JSON.stringify({
+    type: 'chill-drawing',
+    version: DRAWING_SCENE_VERSION + 1,
+    objects: { shape: { type: 'future-shape' } },
+  }))
+  assert.equal(changedFutureSchema.status, 'unsupported-version')
 })
 
 function shape(type: 'line' | 'arrow', width: number, height: number): DrawingShapeElement {

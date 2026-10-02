@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -25,9 +26,10 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import {
+  DRAWING_SCENE_VERSION,
   elementBounds,
   normalizedStroke,
-  parseDrawingScene,
+  parseDrawingSceneResult,
   resizeElementFromBounds,
   sceneContentBounds,
   serializeDrawingScene,
@@ -375,7 +377,8 @@ function safeDrawingFilename(title: string): string {
 }
 
 export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCanvasProps) {
-  const initialSceneRef = useRef(parseDrawingScene(initialDrawing))
+  const initialParseRef = useRef(parseDrawingSceneResult(initialDrawing))
+  const initialSceneRef = useRef(initialParseRef.current.scene)
   const [scene, setScene] = useState(initialSceneRef.current)
   const sceneRef = useRef(scene)
   const [history, setHistory] = useState<DrawingScene[]>([initialSceneRef.current])
@@ -905,6 +908,27 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       : tool === 'text' || tool === 'sticky'
         ? 'text'
         : 'crosshair'
+
+  if (initialParseRef.current.status === 'unsupported-version') {
+    const version = initialParseRef.current.version
+    const versionLabel = typeof version === 'number' || typeof version === 'string'
+      ? String(version)
+      : 'unknown'
+    return (
+      <section className="draw-editor" aria-label="Drawing editor">
+        <div className="drawing-version-warning" role="alert">
+          <AlertTriangle aria-hidden="true" size={22} />
+          <div>
+            <strong>Drawing update required</strong>
+            <p>
+              This drawing uses format version {versionLabel}, but this app supports version {DRAWING_SCENE_VERSION}.
+              Your saved drawing is preserved, and editing is disabled until you open it in a compatible version.
+            </p>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="draw-editor" aria-label="Drawing editor">
