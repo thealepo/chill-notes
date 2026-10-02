@@ -227,6 +227,18 @@ export function serializeDrawingScene(scene: DrawingScene): string {
   return JSON.stringify(scene)
 }
 
+/** Keeps the live textarea as the only text renderer while an element is being edited. */
+export function elementsForCanvasPaint(elements: DrawingElement[], editingElementId: string | null): DrawingElement[] {
+  if (!editingElementId) return elements
+
+  return elements.flatMap((element) => {
+    if (element.id !== editingElementId) return [element]
+    if (element.type === 'text') return []
+    if (element.type === 'sticky') return [{ ...element, text: '' }]
+    return [element]
+  })
+}
+
 export function normalizedStroke(
   type: DrawingStrokeElement['type'],
   points: DrawingPoint[],
