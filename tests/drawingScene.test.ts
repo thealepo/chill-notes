@@ -3,9 +3,11 @@ import test from 'node:test'
 import {
   DRAWING_SCENE_VERSION,
   elementBounds,
+  elementsForCanvasPaint,
   parseDrawingScene,
   parseDrawingSceneResult,
   resizeElementFromBounds,
+  type DrawingElement,
   type DrawingShapeElement,
 } from '../src/lib/drawingScene.ts'
 
@@ -79,6 +81,43 @@ test('drawing parser reports unsupported versions so stored data can remain read
     objects: { shape: { type: 'future-shape' } },
   }))
   assert.equal(changedFutureSchema.status, 'unsupported-version')
+})
+
+test('canvas paint elements do not duplicate text under the active editor', () => {
+  const elements: DrawingElement[] = [
+    {
+      id: 'plain-text',
+      type: 'text',
+      x: 10,
+      y: 20,
+      width: 260,
+      height: 72,
+      strokeColor: '#493d40',
+      strokeWidth: 4,
+      opacity: 1,
+      text: 'Rendered once',
+      fontSize: 22,
+    },
+    {
+      id: 'sticky-text',
+      type: 'sticky',
+      x: 40,
+      y: 50,
+      width: 220,
+      height: 150,
+      strokeColor: '#493d40',
+      strokeWidth: 4,
+      opacity: 1,
+      text: 'Also rendered once',
+      fontSize: 18,
+      fillColor: '#f7d9a7',
+    },
+  ]
+
+  assert.strictEqual(elementsForCanvasPaint(elements, null), elements)
+  assert.deepEqual(elementsForCanvasPaint(elements, 'plain-text'), [elements[1]])
+  assert.deepEqual(elementsForCanvasPaint(elements, 'sticky-text'), [elements[0], { ...elements[1], text: '' }])
+  assert.equal(elements[1].type === 'sticky' ? elements[1].text : '', 'Also rendered once')
 })
 
 function shape(type: 'line' | 'arrow', width: number, height: number): DrawingShapeElement {
