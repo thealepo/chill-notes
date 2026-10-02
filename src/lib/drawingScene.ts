@@ -235,6 +235,32 @@ export function elementBounds(element: DrawingElement): ElementBounds {
   return { x, y, width: Math.abs(element.width), height: Math.abs(element.height) }
 }
 
+/** Resizes from the selection box's bottom-right handle without changing line direction. */
+export function resizeElementFromBounds(
+  element: DrawingElement,
+  width: number,
+  height: number,
+  minimumDimension = 12,
+): DrawingElement {
+  const bounds = elementBounds(element)
+  const nextWidth = Math.max(minimumDimension, width)
+  const nextHeight = Math.max(minimumDimension, height)
+
+  if (element.type !== 'line' && element.type !== 'arrow') {
+    return { ...element, x: bounds.x, y: bounds.y, width: nextWidth, height: nextHeight }
+  }
+
+  const widthDirection = Math.sign(element.width) || 1
+  const heightDirection = Math.sign(element.height) || 1
+  return {
+    ...element,
+    x: widthDirection < 0 ? bounds.x + nextWidth : bounds.x,
+    y: heightDirection < 0 ? bounds.y + nextHeight : bounds.y,
+    width: widthDirection * nextWidth,
+    height: heightDirection * nextHeight,
+  }
+}
+
 function distanceToSegment(point: DrawingPoint, start: DrawingPoint, end: DrawingPoint): number {
   const dx = end.x - start.x
   const dy = end.y - start.y
