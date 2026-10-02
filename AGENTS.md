@@ -55,7 +55,7 @@ Generated directories such as `node_modules`, `dist`, and `.vite`, plus `*.tsbui
 
 `Note` and `NoteBlock` in `src/types.ts` are the source of truth. A note contains its block array plus optional presentation/archive state and an optional canvas data URL. Supported block kinds are text, three heading levels, bullet, numbered, checklist, quote, divider, code, and math.
 
-All notes are held in `App` state and the entire array is written to local storage under `chill-notes-v1` after changes. Theme preference is separate under `chill-notes-theme`; system mode is represented by removing that key. There is no server, router, database, authentication, or network data layer.
+Notes and deletion tombstones are held in `App` state and written as a versioned workspace envelope under `chill-notes-v1` after changes. Theme preference is separate under `chill-notes-theme`; system mode is represented by removing that key. There is no server, router, database, authentication, or network data layer.
 
 Important persistence behaviors:
 
