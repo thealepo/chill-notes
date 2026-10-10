@@ -32,7 +32,7 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
 function openWorkspaceDatabase(): Promise<IDBDatabase> {
   if (databasePromise) return databasePromise
 
-  databasePromise = new Promise((resolve, reject) => {
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
     request.onupgradeneeded = () => {
       const database = request.result
@@ -57,8 +57,12 @@ function openWorkspaceDatabase(): Promise<IDBDatabase> {
       reject(new Error('IndexedDB upgrade was blocked by another tab.'))
     }
   })
+  databasePromise = opening
+  void opening.catch(() => {
+    if (databasePromise === opening) databasePromise = null
+  })
 
-  return databasePromise
+  return opening
 }
 
 function parseWorkspace(value: unknown): StoredWorkspace | null {

@@ -43,6 +43,11 @@ interface UseWorkspaceStorageResult {
   syncedAt: number | null
 }
 
+interface PendingWorkspaceSave {
+  snapshot: StoredWorkspace
+  revision: number
+}
+
 const IDB_FALLBACK_DETAIL = 'Using limited browser storage. Download a backup before adding large drawings.'
 const SAVE_FAILED_DETAIL = 'Changes are only in this tab. Download a recovery backup before closing it.'
 
@@ -64,7 +69,8 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const touchedBeforeHydrationRef = useRef(false)
   const workspaceRef = useRef(workspace)
   const revisionRef = useRef(0)
-  const saveQueueRef = useRef(Promise.resolve())
+  const pendingSaveRef = useRef<PendingWorkspaceSave | null>(null)
+  const saveRunningRef = useRef(false)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const mountedRef = useRef(true)
   workspaceRef.current = workspace
@@ -79,42 +85,47 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     if (mountedRef.current) setUsage(nextUsage)
   }, [])
 
-  const persist = useCallback((snapshot: StoredWorkspace) => {
-    const revision = ++revisionRef.current
-    setStatus((current) => ({ ...current, phase: 'saving' }))
+  const runSaveQueue = useCallback(async () => {
+    if (saveRunningRef.current) return
+    saveRunningRef.current = true
 
-    saveQueueRef.current = saveQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        try {
-          await writeIndexedWorkspace(snapshot)
-          removeLegacyWorkspace()
-          announceWorkspaceChange()
-          channelRef.current?.postMessage({ type: 'workspace-changed' })
-          if (mountedRef.current && revision === revisionRef.current) {
-            setStatus({ phase: 'saved', backend: 'indexeddb' })
-            await refreshUsage()
-          }
-          return
-        } catch {
-          // Private browsing modes and restrictive browser settings can disable
-          // IndexedDB. Retain the previous localStorage path as a fallback.
-        }
+    while (pendingSaveRef.current) {
+      const { snapshot, revision } = pendingSaveRef.current
+      pendingSaveRef.current = null
+      let nextStatus: WorkspaceStorageStatus
 
+      try {
+        await writeIndexedWorkspace(snapshot)
+        removeLegacyWorkspace()
+        announceWorkspaceChange()
+        channelRef.current?.postMessage({ type: 'workspace-changed' })
+        nextStatus = { phase: 'saved', backend: 'indexeddb' }
+      } catch {
+        // Private browsing modes and restrictive browser settings can disable
+        // IndexedDB. Retain the previous localStorage path as a fallback.
         try {
           writeLegacyWorkspace(snapshot)
-          if (mountedRef.current && revision === revisionRef.current) {
-            setStatus({ phase: 'warning', backend: 'localstorage', detail: IDB_FALLBACK_DETAIL })
-            await refreshUsage()
-          }
+          nextStatus = { phase: 'warning', backend: 'localstorage', detail: IDB_FALLBACK_DETAIL }
         } catch {
-          if (mountedRef.current && revision === revisionRef.current) {
-            setStatus({ phase: 'error', backend: null, detail: SAVE_FAILED_DETAIL })
-            await refreshUsage()
-          }
+          nextStatus = { phase: 'error', backend: null, detail: SAVE_FAILED_DETAIL }
         }
-      })
+      }
+
+      if (mountedRef.current && revision === revisionRef.current) {
+        setStatus(nextStatus)
+        void refreshUsage()
+      }
+    }
+
+    saveRunningRef.current = false
   }, [refreshUsage])
+
+  const persist = useCallback((snapshot: StoredWorkspace) => {
+    const revision = ++revisionRef.current
+    pendingSaveRef.current = { snapshot, revision }
+    setStatus((current) => ({ ...current, phase: 'saving' }))
+    void runSaveQueue()
+  }, [runSaveQueue])
 
   useEffect(() => {
     mountedRef.current = true

@@ -233,7 +233,7 @@ export function AppSidebar({
           {workspaceMenuOpen && (
             <div className="workspace-menu" role="menu">
               {storageUsage && (
-                <div className={`storage-summary is-${storageUsage.pressure}`} role="status">
+                <div className={`storage-summary is-${storageUsage.pressure}`} role="presentation">
                   <HardDrive size={15} />
                   <span>
                     <strong>Browser storage</strong>
