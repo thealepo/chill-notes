@@ -62,4 +62,3 @@ export function placeholderForBlock(kind: BlockKind, focused: boolean, onlyBlock
       return "Type '/' for commands"
   }
 }
-
