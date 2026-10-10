@@ -12,12 +12,14 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 - Select, move, resize, duplicate, reorder, pan, zoom, switch paper templates, undo/redo, and export the full board as PNG
 - PNG export reports and skips an unavailable legacy background image instead of blocking the export
 - Multiple searchable notes, favorites, focus mode, and responsive navigation
-- JSON backup import/export and per-note Markdown export
+- One-click JSON recovery backups, defensive import, and per-note Markdown export
 - Conflict-safe synchronization between open browser tabs
 - System-aware light and dark themes with persisted Light, Dark, and System preferences
-- Browser-local persistence with no account required
+- IndexedDB persistence with automatic localStorage migration, capacity warnings, and no account required
 
 The theme selector is under **Settings → Appearance** in the sidebar. System mode follows OS theme changes live; explicit Light and Dark choices are saved in the browser and applied before the app paints to avoid a theme flash.
+
+Notes and drawings are saved in IndexedDB, which provides substantially more room than localStorage for drawing-heavy workspaces. Existing `chill-notes-v1` localStorage data moves automatically on first load. The workspace menu shows the browser's storage estimate when available; if capacity gets low or saving fails, Chill Notes keeps the current tab usable and presents a **Download backup** action for immediate recovery.
 
 ## Editing shortcuts
 
