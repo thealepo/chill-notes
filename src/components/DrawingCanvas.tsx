@@ -1,30 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
-  ArrowUpRight,
-  Circle,
-  Copy,
   Download,
-  Eraser,
-  Hand,
-  Highlighter,
-  Maximize2,
-  Minus,
-  MousePointer2,
-  Pencil,
-  Redo2,
   RotateCcw,
   Sparkles,
-  Square,
-  StickyNote,
-  Trash2,
-  Type,
-  Undo2,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react'
+import { DrawingSelectionToolbar, DrawingToolbar, DrawingZoomControls } from './DrawingControls'
+import { drawingColors, drawingTools } from './drawingControlsConfig'
 import {
   DRAWING_SCENE_VERSION,
   elementBounds,
@@ -35,7 +17,6 @@ import {
   serializeDrawingScene,
   topElementAt,
   type DrawingElement,
-  type DrawingPaper,
   type DrawingPoint,
   type DrawingScene,
   type DrawingShapeElement,
@@ -91,30 +72,7 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const DEFAULT_VIEWPORT: DrawingViewport = { x: 48, y: 42, zoom: 1 }
 
-const colors = [
-  { value: '#493d40', label: 'Charcoal' },
-  { value: '#c36e82', label: 'Rose' },
-  { value: '#9c6a92', label: 'Mauve' },
-  { value: '#718a78', label: 'Sage' },
-  { value: '#bc825d', label: 'Clay' },
-  { value: '#46768c', label: 'Blue' },
-]
-
 const stickyColors = ['#f7d9a7', '#f5cbd5', '#d8d2ef', '#cfe5d5']
-
-const toolConfig: Array<{ tool: DrawingTool; label: string; shortcut: string; icon: typeof Pencil }> = [
-  { tool: 'select', label: 'Select', shortcut: 'V', icon: MousePointer2 },
-  { tool: 'hand', label: 'Hand', shortcut: 'H', icon: Hand },
-  { tool: 'pen', label: 'Pen', shortcut: 'P', icon: Pencil },
-  { tool: 'highlighter', label: 'Highlight', shortcut: 'M', icon: Highlighter },
-  { tool: 'eraser', label: 'Eraser', shortcut: 'E', icon: Eraser },
-  { tool: 'rectangle', label: 'Rectangle', shortcut: 'R', icon: Square },
-  { tool: 'ellipse', label: 'Ellipse', shortcut: 'O', icon: Circle },
-  { tool: 'line', label: 'Line', shortcut: 'L', icon: Minus },
-  { tool: 'arrow', label: 'Arrow', shortcut: 'A', icon: ArrowUpRight },
-  { tool: 'text', label: 'Text', shortcut: 'T', icon: Type },
-  { tool: 'sticky', label: 'Sticky', shortcut: 'S', icon: StickyNote },
-]
 
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
@@ -140,7 +98,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const [history, setHistory] = useState<DrawingScene[]>([initialSceneRef.current])
   const [historyIndex, setHistoryIndex] = useState(0)
   const [tool, setTool] = useState<DrawingTool>('select')
-  const [color, setColor] = useState(colors[0].value)
+  const [color, setColor] = useState(drawingColors[0].value)
   const [size, setSize] = useState(4)
   const [viewport, setViewport] = useState<DrawingViewport>(DEFAULT_VIEWPORT)
   const viewportRef = useRef(viewport)
@@ -296,7 +254,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
         spacePanningRef.current = true
         return
       }
-      const shortcut = toolConfig.find((item) => item.shortcut.toLowerCase() === event.key.toLowerCase())
+      const shortcut = drawingTools.find((item) => item.shortcut.toLowerCase() === event.key.toLowerCase())
       if (shortcut && !event.metaKey && !event.ctrlKey && !event.altKey) setTool(shortcut.tool)
       if ((event.key === '+' || event.key === '=') && !event.metaKey && !event.ctrlKey) {
         setLiveViewport({ ...viewportRef.current, zoom: clampZoom(viewportRef.current.zoom * 1.15) })
@@ -825,7 +783,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       : tool === 'text' || tool === 'sticky'
         ? 'text'
         : 'crosshair'
-  const activeToolLabel = toolConfig.find((item) => item.tool === tool)?.label ?? tool
+  const activeToolLabel = drawingTools.find((item) => item.tool === tool)?.label ?? tool
 
   if (initialParseRef.current.status === 'unsupported-version') {
     const version = initialParseRef.current.version
@@ -850,77 +808,32 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
 
   return (
     <section className="draw-editor" aria-label="Drawing editor">
-      <div className="drawing-toolbar">
-        <div className="tool-group drawing-tools" role="toolbar" aria-label="Drawing tools">
-          {toolConfig.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.tool}
-                className={tool === item.tool ? 'active' : ''}
-                onClick={() => setTool(item.tool)}
-                aria-pressed={tool === item.tool}
-                aria-label={`${item.label} (${item.shortcut})`}
-                title={`${item.label} (${item.shortcut})`}
-              >
-                <Icon size={17} />
-                <span className="tool-label">{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-        <div className="toolbar-divider" />
-        <div className="drawing-properties">
-          <div className="color-picker" role="group" aria-label="Ink color">
-            {colors.map((item) => (
-              <button
-                key={item.value}
-                className={color === item.value ? 'active' : ''}
-                style={{ '--swatch': item.value } as React.CSSProperties}
-                onClick={() => chooseColor(item.value)}
-                aria-label={item.label}
-                aria-pressed={color === item.value}
-                title={item.label}
-              />
-            ))}
-          </div>
-          <label className="stroke-size" title="Stroke size">
-            <span className="stroke-preview-slot"><span className="stroke-preview" style={{ width: Math.max(3, size), height: Math.max(3, size) }} /></span>
-            <input type="range" min="2" max="14" value={size} onChange={(event) => chooseSize(Number(event.target.value))} aria-label="Stroke size" />
-          </label>
-          <label className="paper-select">
-            <span>Paper</span>
-            <select
-              value={scene.paper}
-              onChange={(event) => commitScene({ ...sceneRef.current, paper: event.target.value as DrawingPaper })}
-              aria-label="Paper style"
-            >
-              <option value="dot">Dots</option>
-              <option value="grid">Grid</option>
-              <option value="lined">Lined</option>
-              <option value="blank">Blank</option>
-            </select>
-          </label>
-        </div>
-        <div className="toolbar-spacer" />
-        <div className="tool-group history-tools">
-          <button onClick={() => moveHistory(-1)} disabled={historyIndex <= 0} aria-label="Undo" title="Undo (Mod+Z)"><Undo2 size={17} /></button>
-          <button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} aria-label="Redo" title="Redo (Mod+Shift+Z)"><Redo2 size={17} /></button>
-          <button onClick={clearBoard} disabled={scene.elements.length === 0} aria-label="Clear board" title="Clear board"><Trash2 size={17} /></button>
-          <button className="export-button" onClick={exportDrawing} disabled={exporting}>
-            <Download size={16} />{exporting ? 'Preparing…' : 'Export'}
-          </button>
-        </div>
-      </div>
+      <DrawingToolbar
+        tool={tool}
+        color={color}
+        size={size}
+        paper={scene.paper}
+        canUndo={historyIndex > 0}
+        canRedo={historyIndex < history.length - 1}
+        hasElements={scene.elements.length > 0}
+        exporting={exporting}
+        onToolChange={setTool}
+        onColorChange={chooseColor}
+        onSizeChange={chooseSize}
+        onPaperChange={(paper) => commitScene({ ...sceneRef.current, paper })}
+        onUndo={() => moveHistory(-1)}
+        onRedo={() => moveHistory(1)}
+        onClear={clearBoard}
+        onExport={exportDrawing}
+      />
 
       {selectedElement && selectedElement.type !== 'image' && (
-        <div className="selection-toolbar" role="toolbar" aria-label="Selected object actions">
-          <span>{selectedElement.type === 'highlighter' ? 'Highlight' : selectedElement.type.charAt(0).toUpperCase() + selectedElement.type.slice(1)} selected</span>
-          <button onClick={duplicateSelected}><Copy size={15} />Duplicate</button>
-          <button onClick={() => moveSelectedLayer(-1)} title="Send backward"><ArrowDown size={15} />Back</button>
-          <button onClick={() => moveSelectedLayer(1)} title="Bring forward"><ArrowUp size={15} />Front</button>
-          <button onClick={deleteSelected} className="danger-action"><Trash2 size={15} />Delete</button>
-        </div>
+        <DrawingSelectionToolbar
+          element={selectedElement}
+          onDuplicate={duplicateSelected}
+          onMoveLayer={moveSelectedLayer}
+          onDelete={deleteSelected}
+        />
       )}
 
       <div className="canvas-shell">
@@ -981,12 +894,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
               }}
             />
           )}
-          <div className="canvas-zoom-controls" role="group" aria-label="Canvas zoom">
-            <button onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" title="Zoom out"><ZoomOut size={16} /></button>
-            <button onClick={fitToContent} className="zoom-level" title="Fit content">{Math.round(viewport.zoom * 100)}%</button>
-            <button onClick={() => zoomBy(1.2)} aria-label="Zoom in" title="Zoom in"><ZoomIn size={16} /></button>
-            <button onClick={fitToContent} aria-label="Fit content" title="Fit content"><Maximize2 size={16} /></button>
-          </div>
+          <DrawingZoomControls zoom={viewport.zoom} onZoom={zoomBy} onFit={fitToContent} />
         </div>
       </div>
       <div className="drawing-tip" role="status" aria-live="polite" aria-atomic="true">
