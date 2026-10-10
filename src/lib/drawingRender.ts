@@ -252,7 +252,3 @@ export function paintDrawingScene(
   if (selected) drawSelection(context, selected, viewport.zoom)
   context.restore()
 }
-
-export function safeDrawingFilename(title: string): string {
-  return title.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/(^-|-$)/g, '').slice(0, 80) || 'sketch'
-}

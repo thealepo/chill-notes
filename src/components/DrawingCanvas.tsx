@@ -30,15 +30,12 @@ import {
   moveDrawingElement,
   nextEditableElement,
 } from '../lib/drawingKeyboard'
+import { downloadDrawingScene } from '../lib/drawingExport'
 import {
-  getDrawingImage,
   paintDrawingScene,
-  safeDrawingFilename,
   type DrawingDraft,
   type DrawingViewport,
 } from '../lib/drawingRender'
-import { waitForImageLoad } from '../lib/imageLoading'
-import { downloadFile } from '../lib/platform'
 import type { DrawingTool } from '../types'
 
 interface DrawingCanvasProps {
@@ -732,34 +729,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     setExportStatus('Preparing drawing export…')
 
     try {
-      const current = sceneRef.current
-      const imageStatuses = await Promise.all(current.elements
-        .filter((element) => element.type === 'image')
-        .map((element) => waitForImageLoad(getDrawingImage(element.source))))
-      const content = sceneContentBounds(current) ?? { x: 0, y: 0, width: 1200, height: 720 }
-      const padding = 64
-      const width = Math.max(320, content.width + padding * 2)
-      const height = Math.max(240, content.height + padding * 2)
-      const scale = Math.min(2, 4096 / Math.max(width, height))
-      const exportCanvas = document.createElement('canvas')
-      exportCanvas.width = Math.ceil(width * scale)
-      exportCanvas.height = Math.ceil(height * scale)
-      const context = exportCanvas.getContext('2d')
-      if (!context) throw new Error('Canvas export is unavailable.')
-      context.setTransform(scale, 0, 0, scale, 0, 0)
-      paintDrawingScene(
-        context,
-        current,
-        { x: padding - content.x, y: padding - content.y, zoom: 1 },
-        width,
-        height,
-        null,
-        null,
-        null,
-      )
-      downloadFile(exportCanvas.toDataURL('image/png'), `${safeDrawingFilename(noteTitle)}.png`)
-
-      const unavailableImages = imageStatuses.filter((status) => status !== 'loaded').length
+      const unavailableImages = await downloadDrawingScene(sceneRef.current, noteTitle)
       setExportStatus(unavailableImages > 0
         ? `Exported without ${unavailableImages} unavailable legacy background ${unavailableImages === 1 ? 'image' : 'images'}.`
         : 'Drawing exported as PNG.')
