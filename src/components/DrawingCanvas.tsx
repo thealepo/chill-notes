@@ -28,7 +28,6 @@ import {
 import {
   DRAWING_SCENE_VERSION,
   elementBounds,
-  elementsForCanvasPaint,
   normalizedStroke,
   parseDrawingSceneResult,
   resizeElementFromBounds,
@@ -50,6 +49,13 @@ import {
   moveDrawingElement,
   nextEditableElement,
 } from '../lib/drawingKeyboard'
+import {
+  getDrawingImage,
+  paintDrawingScene,
+  safeDrawingFilename,
+  type DrawingDraft,
+  type DrawingViewport,
+} from '../lib/drawingRender'
 import { waitForImageLoad } from '../lib/imageLoading'
 import { downloadFile } from '../lib/platform'
 import type { DrawingTool } from '../types'
@@ -60,29 +66,18 @@ interface DrawingCanvasProps {
   noteTitle: string
 }
 
-interface Viewport {
-  x: number
-  y: number
-  zoom: number
-}
-
 interface CanvasSize {
   width: number
   height: number
   ratio: number
 }
 
-type Draft =
-  | { type: 'stroke'; tool: 'pen' | 'highlighter'; points: DrawingPoint[]; color: string; size: number }
-  | { type: 'shape'; element: DrawingShapeElement }
-  | null
-
 type PointerGesture =
   | { type: 'draw'; pointerId: number }
   | { type: 'shape'; pointerId: number; start: DrawingPoint }
   | { type: 'move'; pointerId: number; start: DrawingPoint; before: DrawingScene; element: DrawingElement }
   | { type: 'resize'; pointerId: number; before: DrawingScene; element: DrawingElement }
-  | { type: 'pan'; pointerId: number; startX: number; startY: number; viewport: Viewport }
+  | { type: 'pan'; pointerId: number; startX: number; startY: number; viewport: DrawingViewport }
   | { type: 'erase'; pointerId: number; before: DrawingScene; changed: boolean }
   | null
 
@@ -94,7 +89,7 @@ interface TextEditingState {
 const HISTORY_LIMIT = 60
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
-const DEFAULT_VIEWPORT: Viewport = { x: 48, y: 42, zoom: 1 }
+const DEFAULT_VIEWPORT: DrawingViewport = { x: 48, y: 42, zoom: 1 }
 
 const colors = [
   { value: '#493d40', label: 'Charcoal' },
@@ -121,8 +116,6 @@ const toolConfig: Array<{ tool: DrawingTool; label: string; shortcut: string; ic
   { tool: 'sticky', label: 'Sticky', shortcut: 'S', icon: StickyNote },
 ]
 
-const imageCache = new Map<string, HTMLImageElement>()
-
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
 }
@@ -139,241 +132,6 @@ function drawingValue(scene: DrawingScene): string {
   return scene.elements.length === 0 && scene.paper === 'dot' ? '' : serializeDrawingScene(scene)
 }
 
-function cssVariable(name: string, fallback: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
-
-function getImage(source: string, onLoad?: () => void): HTMLImageElement {
-  const cached = imageCache.get(source)
-  if (cached) {
-    if (onLoad && !cached.complete) cached.addEventListener('load', onLoad, { once: true })
-    return cached
-  }
-  const image = new Image()
-  if (onLoad) image.addEventListener('load', onLoad, { once: true })
-  image.src = source
-  imageCache.set(source, image)
-  return image
-}
-
-function drawPaper(
-  context: CanvasRenderingContext2D,
-  paper: DrawingPaper,
-  viewport: Viewport,
-  width: number,
-  height: number,
-) {
-  const paperColor = cssVariable('--drawing-paper', '#fffaf9')
-  const patternColor = cssVariable('--drawing-dots', '#e5d5d9')
-  context.fillStyle = paperColor
-  context.fillRect(0, 0, width, height)
-  if (paper === 'blank') return
-
-  const spacing = paper === 'lined' ? 32 : 24
-  const left = -viewport.x / viewport.zoom
-  const top = -viewport.y / viewport.zoom
-  const right = left + width / viewport.zoom
-  const bottom = top + height / viewport.zoom
-  context.save()
-  context.translate(viewport.x, viewport.y)
-  context.scale(viewport.zoom, viewport.zoom)
-  context.strokeStyle = patternColor
-  context.fillStyle = patternColor
-  context.lineWidth = 1 / viewport.zoom
-
-  if (paper === 'dot') {
-    const startX = Math.floor(left / spacing) * spacing
-    const startY = Math.floor(top / spacing) * spacing
-    for (let x = startX; x <= right; x += spacing) {
-      for (let y = startY; y <= bottom; y += spacing) {
-        context.beginPath()
-        context.arc(x, y, 1.15 / viewport.zoom, 0, Math.PI * 2)
-        context.fill()
-      }
-    }
-  } else {
-    context.beginPath()
-    if (paper === 'grid') {
-      for (let x = Math.floor(left / spacing) * spacing; x <= right; x += spacing) {
-        context.moveTo(x, top)
-        context.lineTo(x, bottom)
-      }
-    }
-    for (let y = Math.floor(top / spacing) * spacing; y <= bottom; y += spacing) {
-      context.moveTo(left, y)
-      context.lineTo(right, y)
-    }
-    context.stroke()
-  }
-  context.restore()
-}
-
-function wrapText(context: CanvasRenderingContext2D, text: string, width: number): string[] {
-  const lines: string[] = []
-  for (const paragraph of text.split('\n')) {
-    const words = paragraph.split(/\s+/)
-    let line = ''
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word
-      if (line && context.measureText(candidate).width > width) {
-        lines.push(line)
-        line = word
-      } else {
-        line = candidate
-      }
-    }
-    lines.push(line)
-  }
-  return lines
-}
-
-function drawStroke(context: CanvasRenderingContext2D, element: Extract<DrawingElement, { type: 'pen' | 'highlighter' }>) {
-  const points = element.points.map((point) => ({
-    x: element.x + point.x * element.width,
-    y: element.y + point.y * element.height,
-    pressure: point.pressure,
-  }))
-  if (points.length === 0) return
-  context.save()
-  context.strokeStyle = element.strokeColor
-  context.fillStyle = element.strokeColor
-  context.globalAlpha = element.opacity
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-  const multiplier = element.type === 'highlighter' ? 4 : 1
-  if (points.length === 1) {
-    const radius = element.strokeWidth * multiplier / 2
-    context.beginPath()
-    context.arc(points[0].x, points[0].y, radius, 0, Math.PI * 2)
-    context.fill()
-  } else {
-    for (let index = 1; index < points.length; index += 1) {
-      const previous = points[index - 1]
-      const point = points[index]
-      const pressure = element.type === 'highlighter' ? 0.5 : (previous.pressure + point.pressure) / 2
-      context.lineWidth = element.strokeWidth * multiplier * (0.72 + pressure * 0.56)
-      context.beginPath()
-      context.moveTo(previous.x, previous.y)
-      context.lineTo(point.x, point.y)
-      context.stroke()
-    }
-  }
-  context.restore()
-}
-
-function drawArrowHead(context: CanvasRenderingContext2D, element: DrawingShapeElement) {
-  const endX = element.x + element.width
-  const endY = element.y + element.height
-  const angle = Math.atan2(element.height, element.width)
-  const length = Math.max(10, element.strokeWidth * 4)
-  context.beginPath()
-  context.moveTo(endX - Math.cos(angle - Math.PI / 6) * length, endY - Math.sin(angle - Math.PI / 6) * length)
-  context.lineTo(endX, endY)
-  context.lineTo(endX - Math.cos(angle + Math.PI / 6) * length, endY - Math.sin(angle + Math.PI / 6) * length)
-  context.stroke()
-}
-
-function drawElement(context: CanvasRenderingContext2D, element: DrawingElement, onImageLoad?: () => void) {
-  if (element.type === 'pen' || element.type === 'highlighter') {
-    drawStroke(context, element)
-    return
-  }
-
-  context.save()
-  context.globalAlpha = element.opacity
-  context.strokeStyle = element.strokeColor
-  context.fillStyle = element.strokeColor
-  context.lineWidth = element.strokeWidth
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-
-  if (element.type === 'rectangle') {
-    const bounds = elementBounds(element)
-    context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height)
-  } else if (element.type === 'ellipse') {
-    const bounds = elementBounds(element)
-    context.beginPath()
-    context.ellipse(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, bounds.width / 2, bounds.height / 2, 0, 0, Math.PI * 2)
-    context.stroke()
-  } else if (element.type === 'line' || element.type === 'arrow') {
-    context.beginPath()
-    context.moveTo(element.x, element.y)
-    context.lineTo(element.x + element.width, element.y + element.height)
-    context.stroke()
-    if (element.type === 'arrow') drawArrowHead(context, element)
-  } else if (element.type === 'text' || element.type === 'sticky') {
-    const padding = element.type === 'sticky' ? 18 : 2
-    if (element.type === 'sticky') {
-      context.save()
-      context.shadowColor = 'rgba(79, 48, 59, 0.14)'
-      context.shadowBlur = 12
-      context.shadowOffsetY = 4
-      context.fillStyle = element.fillColor
-      context.fillRect(element.x, element.y, element.width, element.height)
-      context.restore()
-    }
-    context.fillStyle = element.strokeColor
-    context.font = `${element.fontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
-    context.textBaseline = 'top'
-    const lines = wrapText(context, element.text, Math.max(20, element.width - padding * 2))
-    const lineHeight = element.fontSize * 1.3
-    lines.slice(0, Math.max(1, Math.floor((element.height - padding * 2) / lineHeight))).forEach((line, index) => {
-      context.fillText(line, element.x + padding, element.y + padding + index * lineHeight)
-    })
-  } else if (element.type === 'image') {
-    const image = getImage(element.source, onImageLoad)
-    if (image.complete && image.naturalWidth) context.drawImage(image, element.x, element.y, element.width, element.height)
-  }
-  context.restore()
-}
-
-function drawSelection(context: CanvasRenderingContext2D, element: DrawingElement, zoom: number) {
-  const bounds = elementBounds(element)
-  const color = cssVariable('--accent-strong', '#b45f78')
-  context.save()
-  context.strokeStyle = color
-  context.fillStyle = cssVariable('--surface', '#fff')
-  context.lineWidth = 1.5 / zoom
-  context.setLineDash([6 / zoom, 4 / zoom])
-  context.strokeRect(bounds.x - 5 / zoom, bounds.y - 5 / zoom, bounds.width + 10 / zoom, bounds.height + 10 / zoom)
-  context.setLineDash([])
-  const handleSize = 10 / zoom
-  context.fillRect(bounds.x + bounds.width - handleSize / 2, bounds.y + bounds.height - handleSize / 2, handleSize, handleSize)
-  context.strokeRect(bounds.x + bounds.width - handleSize / 2, bounds.y + bounds.height - handleSize / 2, handleSize, handleSize)
-  context.restore()
-}
-
-function paintScene(
-  context: CanvasRenderingContext2D,
-  scene: DrawingScene,
-  viewport: Viewport,
-  width: number,
-  height: number,
-  draft: Draft,
-  selectedId: string | null,
-  editingElementId: string | null,
-  onImageLoad?: () => void,
-) {
-  drawPaper(context, scene.paper, viewport, width, height)
-  context.save()
-  context.translate(viewport.x, viewport.y)
-  context.scale(viewport.zoom, viewport.zoom)
-  elementsForCanvasPaint(scene.elements, editingElementId)
-    .forEach((element) => drawElement(context, element, onImageLoad))
-  if (draft?.type === 'stroke' && draft.points.length) {
-    drawStroke(context, normalizedStroke(draft.tool, draft.points, draft.color, draft.size))
-  } else if (draft?.type === 'shape') {
-    drawElement(context, draft.element)
-  }
-  const selected = selectedId ? scene.elements.find((element) => element.id === selectedId) : undefined
-  if (selected) drawSelection(context, selected, viewport.zoom)
-  context.restore()
-}
-
-function safeDrawingFilename(title: string): string {
-  return title.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/(^-|-$)/g, '').slice(0, 80) || 'sketch'
-}
-
 export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCanvasProps) {
   const initialParseRef = useRef(parseDrawingSceneResult(initialDrawing))
   const initialSceneRef = useRef(initialParseRef.current.scene)
@@ -384,12 +142,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const [tool, setTool] = useState<DrawingTool>('select')
   const [color, setColor] = useState(colors[0].value)
   const [size, setSize] = useState(4)
-  const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
+  const [viewport, setViewport] = useState<DrawingViewport>(DEFAULT_VIEWPORT)
   const viewportRef = useRef(viewport)
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({ width: 1, height: 1, ratio: 1 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<Draft>(null)
-  const draftRef = useRef<Draft>(null)
+  const [draft, setDraft] = useState<DrawingDraft>(null)
+  const draftRef = useRef<DrawingDraft>(null)
   const gestureRef = useRef<PointerGesture>(null)
   const spacePanningRef = useRef(false)
   const [editing, setEditing] = useState<TextEditingState | null>(null)
@@ -415,12 +173,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     setScene(next)
   }, [])
 
-  const setLiveViewport = useCallback((next: Viewport) => {
+  const setLiveViewport = useCallback((next: DrawingViewport) => {
     viewportRef.current = next
     setViewport(next)
   }, [])
 
-  const setLiveDraft = useCallback((next: Draft) => {
+  const setLiveDraft = useCallback((next: DrawingDraft) => {
     draftRef.current = next
     setDraft(next)
   }, [])
@@ -478,7 +236,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     if (!context) return
     context.setTransform(canvasSize.ratio, 0, 0, canvasSize.ratio, 0, 0)
     context.clearRect(0, 0, canvasSize.width, canvasSize.height)
-    paintScene(
+    paintDrawingScene(
       context,
       scene,
       viewport,
@@ -1019,7 +777,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       const current = sceneRef.current
       const imageStatuses = await Promise.all(current.elements
         .filter((element) => element.type === 'image')
-        .map((element) => waitForImageLoad(getImage(element.source))))
+        .map((element) => waitForImageLoad(getDrawingImage(element.source))))
       const content = sceneContentBounds(current) ?? { x: 0, y: 0, width: 1200, height: 720 }
       const padding = 64
       const width = Math.max(320, content.width + padding * 2)
@@ -1031,7 +789,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       const context = exportCanvas.getContext('2d')
       if (!context) throw new Error('Canvas export is unavailable.')
       context.setTransform(scale, 0, 0, scale, 0, 0)
-      paintScene(
+      paintDrawingScene(
         context,
         current,
         { x: padding - content.x, y: padding - content.y, zoom: 1 },
