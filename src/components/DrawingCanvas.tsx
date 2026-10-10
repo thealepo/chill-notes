@@ -30,6 +30,7 @@ import {
   moveDrawingElement,
   nextEditableElement,
 } from '../lib/drawingKeyboard'
+import { appendDrawingHistory, stepDrawingHistory } from '../lib/drawingHistory'
 import { downloadDrawingScene } from '../lib/drawingExport'
 import {
   paintDrawingScene,
@@ -64,7 +65,6 @@ interface TextEditingState {
   before: DrawingScene
 }
 
-const HISTORY_LIMIT = 60
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const DEFAULT_VIEWPORT: DrawingViewport = { x: 48, y: 42, zoom: 1 }
@@ -159,9 +159,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
 
   const commitScene = useCallback((next: DrawingScene) => {
     setLiveScene(next)
-    const nextHistory = [...history.slice(0, historyIndex + 1), cloneScene(next)].slice(-HISTORY_LIMIT)
-    setHistory(nextHistory)
-    setHistoryIndex(nextHistory.length - 1)
+    const update = appendDrawingHistory(history, historyIndex, next)
+    setHistory(update.entries)
+    setHistoryIndex(update.index)
     onChange(drawingValue(next))
   }, [history, historyIndex, onChange, setLiveScene])
 
@@ -209,13 +209,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   }, [editing])
 
   const moveHistory = useCallback((direction: -1 | 1) => {
-    const nextIndex = historyIndex + direction
-    if (nextIndex < 0 || nextIndex >= history.length) return
-    const next = cloneScene(history[nextIndex])
-    setHistoryIndex(nextIndex)
+    const step = stepDrawingHistory(history, historyIndex, direction)
+    if (!step) return
+    setHistoryIndex(step.index)
     setSelectedId(null)
-    setLiveScene(next)
-    onChange(drawingValue(next))
+    setLiveScene(step.scene)
+    onChange(drawingValue(step.scene))
   }, [history, historyIndex, onChange, setLiveScene])
 
   const deleteSelected = useCallback(() => {
