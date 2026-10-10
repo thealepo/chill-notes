@@ -110,10 +110,16 @@ export async function readIndexedWorkspace(): Promise<StoredWorkspace | null> {
 export async function writeIndexedWorkspace(workspace: StoredWorkspace): Promise<void> {
   const database = await openWorkspaceDatabase()
   const transaction = database.transaction(WORKSPACE_STORE, 'readwrite')
-  await requestResult(transaction.objectStore(WORKSPACE_STORE).put(
+  const completed = new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction was aborted.'))
+  })
+  transaction.objectStore(WORKSPACE_STORE).put(
     serializeStoredWorkspace(workspace),
     CURRENT_WORKSPACE_KEY,
-  ))
+  )
+  await completed
 }
 
 export function writeLegacyWorkspace(workspace: StoredWorkspace): void {
