@@ -2,29 +2,22 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent
 import {
   AlertCircle,
   Archive,
-  ArrowDownAZ,
-  CalendarClock,
   Command,
   Copy,
-  Download,
   Feather,
   FileText,
   Heart,
   ImagePlus,
   Menu,
   MoreHorizontal,
-  Plus,
   RotateCcw,
-  Search,
-  Settings,
   SmilePlus,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react'
+import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
 import { DrawingCanvas } from './components/DrawingCanvas'
 import { NoteEditor } from './components/NoteEditor'
-import { ThemeSwitcher } from './components/ThemeSwitcher'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
 import {
@@ -36,14 +29,11 @@ import {
   serializeStoredWorkspace,
   type StoredWorkspace,
 } from './lib/noteSerialization'
-import { downloadFile, modKeyLabel } from './lib/platform'
+import { downloadFile } from './lib/platform'
 import type { EditorMode, Note } from './types'
 
 const STORAGE_KEY = 'chill-notes-v1'
 const CORRUPT_BACKUP_KEY = 'chill-notes-v1-unreadable-backup'
-
-type NoteView = 'notes' | 'archive'
-type SortOrder = 'updated' | 'title'
 
 function readWorkspace(): StoredWorkspace {
   let saved: string | null = null
@@ -62,24 +52,6 @@ function readWorkspace(): StoredWorkspace {
     // Storage may be unavailable or full; nothing else we can do here.
   }
   return { notes: starterNotes, tombstones: {} }
-}
-
-function relativeTime(timestamp: number) {
-  const diff = Math.max(0, Date.now() - timestamp)
-  const minutes = Math.floor(diff / 60_000)
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days}d ago`
-  const date = new Date(timestamp)
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
-  })
 }
 
 function autosizeTitle(element: HTMLTextAreaElement | null) {
@@ -420,138 +392,43 @@ export default function App() {
       </button>
       {notice && <div className="toast" role="status">{notice}</div>}
 
-      <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`}>
-        <div className="brand-row">
-          <div className="brand-mark"><Feather size={18} strokeWidth={1.8} /></div>
-          <span className="brand-name">chill notes</span>
-          <button className="icon-button sidebar-close" onClick={() => setSidebarOpen(false)} aria-label="Close notes">
-            <X size={18} />
-          </button>
-        </div>
-
-        <button className="new-note-button" onClick={createNote}>
-          <Plus size={17} />
-          New note
-          <span className="key-hint">N</span>
-        </button>
-
-        <label className="search-field">
-          <Search size={16} />
-          <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search notes" />
-          <span className="key-hint">{modKeyLabel} K</span>
-        </label>
-
-        <div className="sidebar-section-label">
-          <span>
-            {view === 'archive' ? 'Archive' : 'Notes'}
-            <span className="note-count">{visibleNotes.length}</span>
-          </span>
-          <div className="sidebar-section-actions">
-            <button
-              className={`bare-button favorite-filter ${favoritesOnly ? 'active' : ''}`}
-              onClick={() => setFavoritesOnly((current) => !current)}
-              aria-pressed={favoritesOnly}
-              aria-label={favoritesOnly ? 'Show all notes' : 'Show favorite notes only'}
-              title={favoritesOnly ? 'Showing favorite notes only' : 'Show favorite notes only'}
-            >
-              <Heart size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              className={`bare-button sort-button ${sortOrder === 'title' ? 'alphabetical' : ''}`}
-              onClick={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
-              aria-pressed={sortOrder === 'title'}
-              aria-label={`Sort notes by ${sortOrder === 'updated' ? 'title' : 'last updated'}`}
-              title={`Sorted by ${sortOrder === 'updated' ? 'last updated' : 'title'} · click to sort by ${sortOrder === 'updated' ? 'title' : 'last updated'}`}
-            >
-              {sortOrder === 'title' ? <ArrowDownAZ size={15} /> : <CalendarClock size={15} />}
-            </button>
-          </div>
-        </div>
-
-        <nav className="notes-list" aria-label={favoritesOnly ? 'Favorite notes' : 'Notes'}>
-          {visibleNotes.map((note) => (
-            <button
-              key={note.id}
-              className={`note-item ${note.id === activeNote.id ? 'active' : ''}`}
-              onClick={() => selectNote(note.id)}
-              aria-current={note.id === activeNote.id ? 'page' : undefined}
-            >
-              <span className={`note-icon ${note.pageIcon ? 'has-emoji' : ''}`} aria-hidden="true">{note.pageIcon || (note.favorite ? '✦' : '◌')}</span>
-              <span className="note-details">
-                <span className="note-title">{note.title || 'Untitled note'}</span>
-                <span className="note-meta">
-                  {note.favorite && <Heart size={10} fill="currentColor" aria-label="Favorite" />}
-                  {relativeTime(note.updatedAt)}
-                </span>
-              </span>
-            </button>
-          ))}
-          {visibleNotes.length === 0 && (
-            <div className="empty-search">
-              {favoritesOnly ? 'No favorite notes found.' : view === 'archive' ? 'Archive is empty.' : 'No notes found.'}
-            </div>
-          )}
-        </nav>
-
-        <div className="sidebar-footer">
-          <button
-            className={`sidebar-link ${view === 'archive' ? 'active' : ''}`}
-            onClick={() => showView(view === 'archive' ? 'notes' : 'archive')}
-          >
-            {view === 'archive' ? <RotateCcw size={17} /> : <Archive size={17} />}
-            {view === 'archive' ? 'Back to notes' : 'Archive'}
-          </button>
-
-          <div className="sidebar-control">
-            <button
-              className={`sidebar-link ${settingsOpen ? 'active' : ''}`}
-              onClick={() => { setSettingsOpen((current) => !current); setWorkspaceMenuOpen(false); setNoteMenuOpen(false) }}
-              aria-expanded={settingsOpen}
-              aria-controls="sidebar-settings"
-              data-menu-trigger
-            >
-              <Settings size={17} />Settings
-            </button>
-            {settingsOpen && (
-              <div id="sidebar-settings" className="settings-panel" role="region" aria-labelledby="sidebar-settings-title">
-                <div className="panel-heading">
-                  <strong id="sidebar-settings-title">Settings</strong>
-                  <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={15} /></button>
-                </div>
-                <ThemeSwitcher value={themePreference} onChange={setThemePreference} />
-              </div>
-            )}
-          </div>
-
-          <div className="profile-card">
-            <div className="avatar">AS</div>
-            <div><strong>Alex's space</strong><span>{saveFailed ? 'Not saved — storage unavailable' : 'Saved locally'}</span></div>
-            <button
-              className="icon-button profile-menu-button"
-              onClick={() => { setWorkspaceMenuOpen((current) => !current); setSettingsOpen(false); setNoteMenuOpen(false) }}
-              aria-label="Workspace options"
-              aria-expanded={workspaceMenuOpen}
-              data-menu-trigger
-            >
-              <MoreHorizontal size={17} />
-            </button>
-            {workspaceMenuOpen && (
-              <div className="workspace-menu" role="menu">
-                <button onClick={chooseImportFile} role="menuitem"><Upload size={15} />Import notes</button>
-                <button onClick={exportNotes} role="menuitem"><Download size={15} />Export all notes</button>
-              </div>
-            )}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json,application/json"
-              onChange={importNotes}
-              aria-label="Choose a JSON file to import notes"
-              hidden
-            />
-          </div>
-        </div>
-      </aside>
+      <AppSidebar
+        open={sidebarOpen}
+        notes={visibleNotes}
+        activeId={activeNote.id}
+        view={view}
+        query={query}
+        favoritesOnly={favoritesOnly}
+        sortOrder={sortOrder}
+        settingsOpen={settingsOpen}
+        workspaceMenuOpen={workspaceMenuOpen}
+        saveFailed={saveFailed}
+        themePreference={themePreference}
+        searchInputRef={searchInputRef}
+        importInputRef={importInputRef}
+        onClose={() => setSidebarOpen(false)}
+        onCreateNote={createNote}
+        onQueryChange={setQuery}
+        onToggleFavorites={() => setFavoritesOnly((current) => !current)}
+        onToggleSort={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
+        onSelectNote={selectNote}
+        onShowView={showView}
+        onToggleSettings={() => {
+          setSettingsOpen((current) => !current)
+          setWorkspaceMenuOpen(false)
+          setNoteMenuOpen(false)
+        }}
+        onCloseSettings={() => setSettingsOpen(false)}
+        onThemeChange={setThemePreference}
+        onToggleWorkspaceMenu={() => {
+          setWorkspaceMenuOpen((current) => !current)
+          setSettingsOpen(false)
+          setNoteMenuOpen(false)
+        }}
+        onChooseImport={chooseImportFile}
+        onExportNotes={exportNotes}
+        onImportNotes={importNotes}
+      />
 
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
 
