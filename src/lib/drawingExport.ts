@@ -1,4 +1,5 @@
-import { sceneContentBounds, type DrawingScene } from './drawingScene'
+import type { DrawingImageElement, DrawingScene } from './drawingScene'
+import { createDrawingExportPlan } from './drawingExportPlan'
 import { getDrawingImage, paintDrawingScene } from './drawingRender'
 import { waitForImageLoad } from './imageLoading'
 import { downloadFile } from './platform'
@@ -8,30 +9,31 @@ function safeDrawingFilename(title: string): string {
 }
 
 export async function downloadDrawingScene(scene: DrawingScene, noteTitle: string): Promise<number> {
-  const imageStatuses = await Promise.all(scene.elements
-    .filter((element) => element.type === 'image')
-    .map((element) => waitForImageLoad(getDrawingImage(element.source))))
-  const content = sceneContentBounds(scene) ?? { x: 0, y: 0, width: 1200, height: 720 }
-  const padding = 64
-  const width = Math.max(320, content.width + padding * 2)
-  const height = Math.max(240, content.height + padding * 2)
-  const scale = Math.min(2, 4096 / Math.max(width, height))
+  const imageElements = scene.elements.filter((element): element is DrawingImageElement => element.type === 'image')
+  const imageStatuses = await Promise.all(imageElements.map(async (element) => ({
+    id: element.id,
+    status: await waitForImageLoad(getDrawingImage(element.source)),
+  })))
+  const unavailableImageIds = new Set(imageStatuses
+    .filter(({ status }) => status !== 'loaded')
+    .map(({ id }) => id))
+  const plan = createDrawingExportPlan(scene, unavailableImageIds)
   const exportCanvas = document.createElement('canvas')
-  exportCanvas.width = Math.ceil(width * scale)
-  exportCanvas.height = Math.ceil(height * scale)
+  exportCanvas.width = plan.pixelWidth
+  exportCanvas.height = plan.pixelHeight
   const context = exportCanvas.getContext('2d')
   if (!context) throw new Error('Canvas export is unavailable.')
-  context.setTransform(scale, 0, 0, scale, 0, 0)
+  context.setTransform(plan.scale, 0, 0, plan.scale, 0, 0)
   paintDrawingScene(
     context,
-    scene,
-    { x: padding - content.x, y: padding - content.y, zoom: 1 },
-    width,
-    height,
+    plan.scene,
+    plan.viewport,
+    plan.width,
+    plan.height,
     null,
     null,
     null,
   )
   downloadFile(exportCanvas.toDataURL('image/png'), `${safeDrawingFilename(noteTitle)}.png`)
-  return imageStatuses.filter((status) => status !== 'loaded').length
+  return plan.unavailableImageCount
 }
