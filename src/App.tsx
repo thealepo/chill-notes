@@ -1,42 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
 import { Menu } from 'lucide-react'
 import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
+import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
+import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
 import {
   markdownFilename,
-  mergeStoredWorkspaces,
-  normalizeStoredWorkspace,
   noteToMarkdown,
   parseImportedNotes,
-  serializeStoredWorkspace,
-  type StoredWorkspace,
 } from './lib/noteSerialization'
 import { downloadFile } from './lib/platform'
 import type { EditorMode, Note } from './types'
-
-const STORAGE_KEY = 'chill-notes-v1'
-const CORRUPT_BACKUP_KEY = 'chill-notes-v1-unreadable-backup'
-
-function readWorkspace(): StoredWorkspace {
-  let saved: string | null = null
-  try {
-    saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return { notes: starterNotes, tombstones: {} }
-    const workspace = normalizeStoredWorkspace(JSON.parse(saved))
-    if (workspace.notes.length > 0) return workspace
-  } catch {
-    // Fall through to the starter note below.
-  }
-  // Keep a copy of unreadable data so the next save does not silently destroy it.
-  try {
-    if (saved) localStorage.setItem(CORRUPT_BACKUP_KEY, saved)
-  } catch {
-    // Storage may be unavailable or full; nothing else we can do here.
-  }
-  return { notes: starterNotes, tombstones: {} }
-}
 
 function autosizeTitle(element: HTMLTextAreaElement | null) {
   if (!element) return
@@ -55,7 +31,13 @@ function blankNote(): Note {
 }
 
 export default function App() {
-  const [workspaceState, setWorkspaceState] = useState<StoredWorkspace>(readWorkspace)
+  const {
+    workspace: workspaceState,
+    setWorkspace: setWorkspaceState,
+    status: storageStatus,
+    usage: storageUsage,
+    syncedAt,
+  } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
   const notes = workspaceState.notes
   const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
   const [mode, setMode] = useState<EditorMode>(() =>
@@ -68,8 +50,6 @@ export default function App() {
   const [noteMenuOpen, setNoteMenuOpen] = useState(false)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
-  const [saveFailed, setSaveFailed] = useState(false)
-  const saveFailedRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -78,12 +58,12 @@ export default function App() {
   const [focusMode, setFocusMode] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
 
-  function setNotes(update: SetStateAction<Note[]>) {
+  const setNotes = useCallback((update: SetStateAction<Note[]>) => {
     setWorkspaceState((current) => ({
       ...current,
       notes: typeof update === 'function' ? update(current.notes) : update,
     }))
-  }
+  }, [setWorkspaceState])
 
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
   const visibleNotes = useMemo(() => {
@@ -102,42 +82,8 @@ export default function App() {
   }, [favoritesOnly, notes, query, sortOrder, view])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, serializeStoredWorkspace(workspaceState))
-      if (saveFailedRef.current) {
-        saveFailedRef.current = false
-        setSaveFailed(false)
-      }
-    } catch {
-      // Quota exceeded (often from large drawings) or storage unavailable. Keep the
-      // in-memory notes and tell the user instead of crashing the app.
-      if (!saveFailedRef.current) {
-        saveFailedRef.current = true
-        setSaveFailed(true)
-        setNotice('Could not save to this browser. Export a backup to keep your changes.')
-      }
-    }
-  }, [workspaceState])
-
-  useEffect(() => {
-    function handleStorage(event: StorageEvent) {
-      if (event.key !== STORAGE_KEY || !event.newValue) return
-      try {
-        const incoming = normalizeStoredWorkspace(JSON.parse(event.newValue))
-        if (incoming.notes.length === 0) return
-        setWorkspaceState((current) => {
-          const merged = mergeStoredWorkspaces(current, incoming)
-          return serializeStoredWorkspace(merged) === serializeStoredWorkspace(current) ? current : merged
-        })
-        setNotice('Synced changes from another tab.')
-      } catch {
-        setNotice('Ignored unreadable changes from another tab.')
-      }
-    }
-
-    window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
-  }, [])
+    if (syncedAt) setNotice('Synced changes from another tab.')
+  }, [syncedAt])
 
   useEffect(() => {
     if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
@@ -361,7 +307,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [])
+  }, [setNotes])
 
   if (!activeNote) return null
 
@@ -371,6 +317,11 @@ export default function App() {
         <Menu size={20} />
       </button>
       {notice && <div className="toast" role="status">{notice}</div>}
+      <StorageRecoveryNotice
+        status={storageStatus}
+        usage={storageUsage}
+        onDownloadBackup={exportNotes}
+      />
 
       <AppSidebar
         open={sidebarOpen}
@@ -382,7 +333,8 @@ export default function App() {
         sortOrder={sortOrder}
         settingsOpen={settingsOpen}
         workspaceMenuOpen={workspaceMenuOpen}
-        saveFailed={saveFailed}
+        storageStatus={storageStatus}
+        storageUsage={storageUsage}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
         importInputRef={importInputRef}
@@ -415,7 +367,7 @@ export default function App() {
       <NoteWorkspace
         note={activeNote}
         mode={mode}
-        saveFailed={saveFailed}
+        saveStatus={storageStatus.phase}
         focusMode={focusMode}
         noteMenuOpen={noteMenuOpen}
         titleInputRef={titleInputRef}

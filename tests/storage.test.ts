@@ -9,6 +9,7 @@ import {
   type StoredWorkspace,
 } from '../src/lib/noteSerialization.ts'
 import type { Note } from '../src/types.ts'
+import { classifyStorageUsage, formatStorageSize } from '../src/lib/storageUsage.ts'
 
 function note(id: string, updatedAt: number, title = id): Note {
   return {
@@ -87,4 +88,20 @@ test('versioned workspace round-trips notes and tombstones', () => {
   }
 
   assert.deepEqual(normalizeStoredWorkspace(JSON.parse(serializeStoredWorkspace(workspace))), workspace)
+})
+
+test('storage usage warns before the browser quota is exhausted', () => {
+  const mebibyte = 1024 * 1024
+  assert.equal(classifyStorageUsage(20 * mebibyte, 100 * mebibyte)?.pressure, 'ok')
+  assert.equal(classifyStorageUsage(76 * mebibyte, 100 * mebibyte)?.pressure, 'warning')
+  assert.equal(classifyStorageUsage(91 * mebibyte, 100 * mebibyte)?.pressure, 'critical')
+  assert.equal(classifyStorageUsage(95 * 1024 * 1024, 100 * 1024 * 1024)?.pressure, 'critical')
+  assert.equal(classifyStorageUsage(0, 0), null)
+})
+
+test('storage sizes use compact human-readable units', () => {
+  assert.equal(formatStorageSize(512), '512 B')
+  assert.equal(formatStorageSize(2 * 1024), '2 KB')
+  assert.equal(formatStorageSize(1.5 * 1024 * 1024), '1.5 MB')
+  assert.equal(formatStorageSize(2 * 1024 * 1024 * 1024), '2.0 GB')
 })

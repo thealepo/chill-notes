@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import type { RefObject } from 'react'
+import type { WorkspaceSavePhase } from '../hooks/useWorkspaceStorage'
 import type { EditorMode, Note } from '../types'
 import { DrawingCanvas } from './DrawingCanvas'
 import { NoteEditor } from './NoteEditor'
@@ -21,7 +22,7 @@ import { NoteEditor } from './NoteEditor'
 interface NoteWorkspaceProps {
   note: Note
   mode: EditorMode
-  saveFailed: boolean
+  saveStatus: WorkspaceSavePhase
   focusMode: boolean
   noteMenuOpen: boolean
   titleInputRef: RefObject<HTMLTextAreaElement>
@@ -43,7 +44,7 @@ function focusFirstBlock() {
 export function NoteWorkspace({
   note,
   mode,
-  saveFailed,
+  saveStatus,
   focusMode,
   noteMenuOpen,
   titleInputRef,
@@ -57,6 +58,18 @@ export function NoteWorkspace({
   onDelete,
   onUpdateNote,
 }: NoteWorkspaceProps) {
+  const saveFailed = saveStatus === 'error'
+  const saveWarning = saveStatus === 'warning'
+  const saveLabel = saveStatus === 'loading'
+    ? 'Loading'
+    : saveStatus === 'saving'
+      ? 'Saving…'
+      : saveFailed
+        ? 'Not saved'
+        : saveWarning
+          ? 'Saved (limited)'
+          : 'Saved'
+
   return (
     <main className="workspace">
       <header className="topbar">
@@ -72,9 +85,9 @@ export function NoteWorkspace({
           </button>
         </div>
         <div className="topbar-actions">
-          <span className={`save-state ${saveFailed ? 'is-error' : ''}`} role="status">
-            {saveFailed ? <AlertCircle size={13} /> : <span className="save-dot" />}
-            {saveFailed ? 'Not saved' : 'Saved'}
+          <span className={`save-state ${saveFailed ? 'is-error' : saveWarning ? 'is-warning' : ''}`} role="status">
+            {saveFailed || saveWarning ? <AlertCircle size={13} /> : <span className="save-dot" />}
+            {saveLabel}
           </span>
           <button className="focus-button topbar-focus" onClick={onToggleFocus} aria-pressed={focusMode}>
             {focusMode ? 'Leave focus' : 'Focus'}

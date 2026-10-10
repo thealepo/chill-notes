@@ -33,8 +33,9 @@ npm run preview
 
 - `index.html` — Vite shell and an inline pre-paint theme bootstrap that prevents a light/dark flash. Keep its storage-key and theme-color behavior aligned with `useTheme`.
 - `src/main.tsx` — React entry point; imports global CSS and KaTeX CSS.
-- `src/App.tsx` — top-level workspace state and orchestration. Owns notes, selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, persistence, note-level import/export, and the type/draw mode switch.
+- `src/App.tsx` — top-level workspace orchestration. Owns selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, note-level import/export, and the type/draw mode switch.
 - `src/components/AppSidebar.tsx` and `src/components/NoteWorkspace.tsx` — focused app-shell presentation for navigation/settings and the active note surface.
+- `src/components/StorageRecoveryNotice.tsx` — low-capacity/save-failure warning with a one-click JSON recovery backup.
 - `src/components/NoteEditor.tsx` — stateful block editing, Markdown shortcuts, keyboard behavior, and drag ordering. Its menus, KaTeX previews, and static block configuration live in the adjacent `NoteEditor*` and `noteEditorConfig.ts` modules.
 - `src/components/DrawingCanvas.tsx` — stateful vector-board interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, and history.
 - `src/components/DrawingControls.tsx` and `src/components/DrawingCanvasSurface.tsx` — focused drawing toolbar, selection, zoom, canvas, and inline text presentation.
@@ -42,7 +43,9 @@ npm run preview
 - `src/lib/drawingKeyboard.ts` — pure keyboard-canvas helpers for cycling editable objects, moving selected objects, creating centered elements, and accessible element labels.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
+- `src/hooks/useWorkspaceStorage.ts` — IndexedDB hydration and serialized saves, legacy localStorage fallback/migration, cross-tab synchronization, and storage-status reporting.
 - `src/lib/noteSerialization.ts` — storage migration, defensive JSON import parsing, Markdown rendering, and safe Markdown filenames.
+- `src/lib/workspaceStorage.ts` and `src/lib/storageUsage.ts` — IndexedDB primitives, legacy storage access, browser quota estimation, and pure capacity-warning helpers.
 - `src/lib/drawingScene.ts` — versioned vector scene types, defensive parsing, legacy PNG upgrade, stroke normalization, object hit-testing, and content bounds.
 - `src/lib/platform.ts` — platform-aware shortcut labels and the shared `downloadFile` helper used by JSON, Markdown, and PNG exports.
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
@@ -51,6 +54,7 @@ npm run preview
 - `tests/drawingScene.test.ts` — regression coverage for drawing-version validation and directional line/arrow parsing and resizing across all four quadrants.
 - `tests/drawingKeyboard.test.ts` — regression coverage for keyboard selection order, immutable object movement, and centered object creation.
 - `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
+- `e2e/chill-notes.spec.ts` — Playwright coverage for editor and drawing interactions, persistence, legacy migration, cross-tab sync, storage warnings/failures, downloads, and the minimum mobile viewport.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
 - `README.md` — concise user-facing feature and setup documentation.
@@ -61,21 +65,23 @@ Generated directories such as `node_modules`, `dist`, and `.vite`, plus `*.tsbui
 
 `Note` and `NoteBlock` in `src/types.ts` are the source of truth. A note contains its block array plus optional presentation/archive state and an optional canvas data URL. Supported block kinds are text, three heading levels, bullet, numbered, checklist, quote, divider, code, and math.
 
-Notes and deletion tombstones are held in `App` state and written as a versioned workspace envelope under `chill-notes-v1` after changes. Theme preference is separate under `chill-notes-theme`; system mode is represented by removing that key. There is no server, router, database, authentication, or network data layer.
+Notes and deletion tombstones are held in React state and written as a versioned workspace envelope to the `chill-notes` IndexedDB database after changes. Theme preference remains separate under the `chill-notes-theme` localStorage key; system mode is represented by removing that key. There is no server, router, remote database, authentication, or network data layer.
 
 Important persistence behaviors:
 
-- `readWorkspace()` falls back to `starterNotes` if stored JSON is absent, unreadable, or contains no usable notes. Unreadable data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
+- `useWorkspaceStorage` hydrates from IndexedDB asynchronously and falls back to `starterNotes` if no usable workspace exists.
+- Existing data under the `chill-notes-v1` localStorage key is normalized, merged into IndexedDB once, and removed only after the IndexedDB transaction completes. Unreadable legacy data is copied to `chill-notes-v1-unreadable-backup` before it can be overwritten.
 - `normalizeStoredNotes` drops stored notes without a usable block array, migrates legacy `heading` blocks to `heading2`, and maps unknown block kinds to `text`.
-- Storage accepts the original notes array and migrates it into a versioned workspace envelope. Open tabs merge notes by `updatedAt`; deterministic same-time conflict handling prevents event loops, and deletion tombstones stop stale tabs from restoring removed notes.
+- Storage accepts the original notes array and migrates it into a versioned workspace envelope. IndexedDB changes are announced through BroadcastChannel plus a lightweight localStorage signal. Open tabs merge notes by `updatedAt`; deterministic same-time conflict handling prevents event loops, and deletion tombstones stop stale tabs from restoring removed notes.
 - Optional stored note fields are rebuilt from validated values instead of being spread into application state. The drawing parser also treats non-string or malformed input as an empty scene.
-- Saving is wrapped in `try/catch`; quota or storage failures show a notice and a "Not saved" status instead of crashing.
+- IndexedDB saves are serialized so an older request cannot overwrite a newer edit. If IndexedDB is unavailable, saving falls back to localStorage with a capacity warning. If both stores fail, the in-memory workspace stays usable and a persistent recovery-backup action is shown.
+- `navigator.storage.estimate()` is used when available. Usage at 75% (or 10 MiB remaining) shows a warning; usage at 90% (or 2 MiB remaining) shows a critical alert. The workspace menu exposes the current usage estimate.
 - JSON imports must be arrays. Import validation is deliberately defensive and skips malformed notes or blocks.
 - Imported notes and blocks receive new `crypto.randomUUID()` IDs, so imports merge rather than overwrite.
 - A valid imported note must retain at least one valid block.
 - Drawings use a versioned `chill-drawing` JSON scene stored in the existing `Note.drawing` string. Existing PNG data URLs remain valid and are loaded as locked background image elements; the scene is upgraded to JSON when it is next edited.
 - Unsupported `chill-drawing` versions are never converted or overwritten. Draw mode presents a read-only compatibility warning while preserving the original drawing string in storage and exports.
-- New ink, shapes, text, and sticky notes remain editable vector elements. Embedded legacy PNG backgrounds can still make browser local-storage limits relevant.
+- New ink, shapes, text, and sticky notes remain editable vector elements. Embedded legacy PNG backgrounds can still consume significant browser storage, so keep capacity warnings and recovery export behavior intact.
 - Markdown export covers typed blocks only. If a note contains a drawing, export adds an HTML comment explaining that the drawing was omitted.
 
 When adding a block kind or note field, update all relevant surfaces together: TypeScript types, editor creation/rendering and shortcuts, import validation/migration, Markdown serialization, duplication behavior, and styles. Consider backward compatibility for already-saved browser data.
@@ -126,9 +132,9 @@ Strokes store pressure plus points normalized to their object bounds, so selecti
 For every code change:
 
 1. Run `npm run check`.
-2. Exercise the changed flow in the browser because no automated interaction tests exist.
+2. Keep Playwright coverage aligned with changed interactions, then exercise any behavior the browser suite cannot represent manually.
 3. For editor changes, verify keyboard entry, focus movement, slash/action menus, drag ordering, and at least one narrow viewport.
-4. For persistence/schema changes, load existing saved notes and round-trip a JSON export/import without losing valid data.
+4. For persistence/schema changes, load existing IndexedDB and legacy localStorage notes, verify cross-tab convergence, and round-trip a JSON export/import without losing valid data.
 5. For Markdown changes, inspect headings, consecutive numbered/list blocks, checklists, multiline quotes, code containing backticks, equations, empty titles, and filename sanitization.
 6. For canvas changes, verify resize preservation, pen/highlighter/eraser behavior, undo/redo, clear, autosave, and PNG export.
 7. For theme or styling changes, verify light, dark, and system modes before and after reload, including mobile layout and keyboard focus indicators.

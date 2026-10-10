@@ -2,7 +2,15 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function openCleanApp(page: Page) {
   await page.goto('/')
-  await page.evaluate(() => window.localStorage.clear())
+  await page.evaluate(async () => {
+    window.localStorage.clear()
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('chill-notes')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('IndexedDB cleanup was blocked.'))
+    })
+  })
   await page.reload()
   await expect(page.getByRole('textbox', { name: 'Note title' })).toBeVisible()
 }
@@ -137,4 +145,99 @@ test('keeps the mobile workspace usable at the minimum supported width', async (
   await expect.poll(async () => (await sidebar.boundingBox())?.x ?? 0).toBeLessThan(0)
   await expect(page.getByRole('textbox', { name: 'Note title' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('migrates legacy localStorage notes into IndexedDB', async ({ page }) => {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('chill-notes')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('IndexedDB cleanup was blocked.'))
+    })
+    window.localStorage.setItem('chill-notes-v1', JSON.stringify({
+      type: 'chill-notes-workspace',
+      version: 1,
+      notes: [{
+        id: 'legacy-note',
+        title: 'Migrated note',
+        updatedAt: Date.now(),
+        favorite: false,
+        blocks: [{ id: 'legacy-block', kind: 'text', content: 'Stored before IndexedDB' }],
+      }],
+      tombstones: {},
+    }))
+  })
+
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Migrated note')
+  await expect(page.getByRole('textbox', { name: 'Text block' })).toHaveValue('Stored before IndexedDB')
+  await expect(page.locator('.save-state')).toContainText('Saved')
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('chill-notes-v1'))).toBeNull()
+
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Migrated note')
+})
+
+test('warns about low browser capacity and downloads a recovery backup', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage, 'estimate', {
+      configurable: true,
+      value: async () => ({ usage: 95 * 1024 * 1024, quota: 100 * 1024 * 1024 }),
+    })
+  })
+  await page.reload()
+
+  const alert = page.getByRole('alert')
+  await expect(alert).toContainText('Browser storage is almost full')
+  await expect(alert).toContainText('95 MB of 100 MB used')
+
+  const downloadPromise = page.waitForEvent('download')
+  await alert.getByRole('button', { name: 'Download backup' }).click()
+  const backup = await downloadPromise
+  expect(backup.suggestedFilename()).toMatch(/^chill-notes-\d{4}-\d{2}-\d{2}\.json$/)
+  expect(await backup.failure()).toBeNull()
+})
+
+test('syncs IndexedDB-backed edits between open tabs', async ({ page, context }) => {
+  await page.getByRole('textbox', { name: 'Note title' }).fill('Shared through IndexedDB')
+  await expect(page.locator('.save-state')).toContainText('Saved')
+
+  const secondPage = await context.newPage()
+  await secondPage.goto('/')
+  await expect(secondPage.getByRole('textbox', { name: 'Note title' })).toHaveValue('Shared through IndexedDB')
+
+  await secondPage.getByRole('textbox', { name: 'Text block' }).fill('Edited in the second tab')
+  await expect(secondPage.locator('.save-state')).toContainText('Saved')
+  await expect(page.getByRole('textbox', { name: 'Text block' })).toHaveValue('Edited in the second tab')
+})
+
+test('keeps recovery download available when browser persistence fails', async ({ page }) => {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('chill-notes')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('IndexedDB cleanup was blocked.'))
+    })
+  })
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'indexedDB', {
+      configurable: true,
+      value: { open: () => { throw new DOMException('Unavailable', 'InvalidStateError') } },
+    })
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function setItemWithQuotaFailure(key, value) {
+      if (key === 'chill-notes-v1') throw new DOMException('Full', 'QuotaExceededError')
+      return setItem.call(this, key, value)
+    }
+  })
+  await page.reload()
+
+  const alert = page.getByRole('alert')
+  await expect(alert).toContainText('Your latest changes are not saved')
+  const downloadPromise = page.waitForEvent('download')
+  await alert.getByRole('button', { name: 'Download backup' }).click()
+  const backup = await downloadPromise
+  expect(await backup.failure()).toBeNull()
 })
