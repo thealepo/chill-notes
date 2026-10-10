@@ -50,6 +50,7 @@ import {
   moveDrawingElement,
   nextEditableElement,
 } from '../lib/drawingKeyboard'
+import { waitForImageLoad } from '../lib/imageLoading'
 import { downloadFile } from '../lib/platform'
 import type { DrawingTool } from '../types'
 
@@ -153,15 +154,6 @@ function getImage(source: string, onLoad?: () => void): HTMLImageElement {
   image.src = source
   imageCache.set(source, image)
   return image
-}
-
-function waitForImage(source: string): Promise<void> {
-  const image = getImage(source)
-  if (image.complete && image.naturalWidth) return Promise.resolve()
-  return new Promise((resolve) => {
-    image.addEventListener('load', () => resolve(), { once: true })
-    image.addEventListener('error', () => resolve(), { once: true })
-  })
 }
 
 function drawPaper(
@@ -408,6 +400,8 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const keyboardMoveRef = useRef<string | null>(null)
   const announcementFrameRef = useRef<number | null>(null)
   const [imageVersion, setImageVersion] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const [exportStatus, setExportStatus] = useState('')
   const keyboardInstructionsId = useId()
   const keyboardStatusId = useId()
 
@@ -443,6 +437,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   useEffect(() => () => {
     if (announcementFrameRef.current !== null) cancelAnimationFrame(announcementFrameRef.current)
   }, [])
+
+  useEffect(() => {
+    if (!exportStatus || exporting) return
+    const timeout = window.setTimeout(() => setExportStatus(''), 6_000)
+    return () => window.clearTimeout(timeout)
+  }, [exportStatus, exporting])
 
   const commitScene = useCallback((next: DrawingScene) => {
     setLiveScene(next)
@@ -1011,30 +1011,47 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   }
 
   async function exportDrawing() {
-    const current = sceneRef.current
-    await Promise.all(current.elements.filter((element) => element.type === 'image').map((element) => waitForImage(element.source)))
-    const content = sceneContentBounds(current) ?? { x: 0, y: 0, width: 1200, height: 720 }
-    const padding = 64
-    const width = Math.max(320, content.width + padding * 2)
-    const height = Math.max(240, content.height + padding * 2)
-    const scale = Math.min(2, 4096 / Math.max(width, height))
-    const exportCanvas = document.createElement('canvas')
-    exportCanvas.width = Math.ceil(width * scale)
-    exportCanvas.height = Math.ceil(height * scale)
-    const context = exportCanvas.getContext('2d')
-    if (!context) return
-    context.setTransform(scale, 0, 0, scale, 0, 0)
-    paintScene(
-      context,
-      current,
-      { x: padding - content.x, y: padding - content.y, zoom: 1 },
-      width,
-      height,
-      null,
-      null,
-      null,
-    )
-    downloadFile(exportCanvas.toDataURL('image/png'), `${safeDrawingFilename(noteTitle)}.png`)
+    if (exporting) return
+    setExporting(true)
+    setExportStatus('Preparing drawing export…')
+
+    try {
+      const current = sceneRef.current
+      const imageStatuses = await Promise.all(current.elements
+        .filter((element) => element.type === 'image')
+        .map((element) => waitForImageLoad(getImage(element.source))))
+      const content = sceneContentBounds(current) ?? { x: 0, y: 0, width: 1200, height: 720 }
+      const padding = 64
+      const width = Math.max(320, content.width + padding * 2)
+      const height = Math.max(240, content.height + padding * 2)
+      const scale = Math.min(2, 4096 / Math.max(width, height))
+      const exportCanvas = document.createElement('canvas')
+      exportCanvas.width = Math.ceil(width * scale)
+      exportCanvas.height = Math.ceil(height * scale)
+      const context = exportCanvas.getContext('2d')
+      if (!context) throw new Error('Canvas export is unavailable.')
+      context.setTransform(scale, 0, 0, scale, 0, 0)
+      paintScene(
+        context,
+        current,
+        { x: padding - content.x, y: padding - content.y, zoom: 1 },
+        width,
+        height,
+        null,
+        null,
+        null,
+      )
+      downloadFile(exportCanvas.toDataURL('image/png'), `${safeDrawingFilename(noteTitle)}.png`)
+
+      const unavailableImages = imageStatuses.filter((status) => status !== 'loaded').length
+      setExportStatus(unavailableImages > 0
+        ? `Exported without ${unavailableImages} unavailable legacy background ${unavailableImages === 1 ? 'image' : 'images'}.`
+        : 'Drawing exported as PNG.')
+    } catch {
+      setExportStatus('Could not export this drawing. Try again or export a JSON backup.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const editingElement = editing
@@ -1132,7 +1149,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
           <button onClick={() => moveHistory(-1)} disabled={historyIndex <= 0} aria-label="Undo" title="Undo (Mod+Z)"><Undo2 size={17} /></button>
           <button onClick={() => moveHistory(1)} disabled={historyIndex >= history.length - 1} aria-label="Redo" title="Redo (Mod+Shift+Z)"><Redo2 size={17} /></button>
           <button onClick={clearBoard} disabled={scene.elements.length === 0} aria-label="Clear board" title="Clear board"><Trash2 size={17} /></button>
-          <button className="export-button" onClick={exportDrawing}><Download size={16} />Export</button>
+          <button className="export-button" onClick={exportDrawing} disabled={exporting}>
+            <Download size={16} />{exporting ? 'Preparing…' : 'Export'}
+          </button>
         </div>
       </div>
 
@@ -1212,7 +1231,11 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
           </div>
         </div>
       </div>
-      <div className="drawing-tip"><RotateCcw size={14} /> Auto-saved · keyboard: V then Enter selects · arrows move · shape key then Enter creates</div>
+      <div className="drawing-tip" role="status" aria-live="polite" aria-atomic="true">
+        {exportStatus
+          ? <><Download size={14} />{exportStatus}</>
+          : <><RotateCcw size={14} />Auto-saved · keyboard: V then Enter selects · arrows move · shape key then Enter creates</>}
+      </div>
     </section>
   )
 }
