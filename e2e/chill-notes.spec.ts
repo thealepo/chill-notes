@@ -198,3 +198,46 @@ test('warns about low browser capacity and downloads a recovery backup', async (
   expect(backup.suggestedFilename()).toMatch(/^chill-notes-\d{4}-\d{2}-\d{2}\.json$/)
   expect(await backup.failure()).toBeNull()
 })
+
+test('syncs IndexedDB-backed edits between open tabs', async ({ page, context }) => {
+  await page.getByRole('textbox', { name: 'Note title' }).fill('Shared through IndexedDB')
+  await expect(page.locator('.save-state')).toContainText('Saved')
+
+  const secondPage = await context.newPage()
+  await secondPage.goto('/')
+  await expect(secondPage.getByRole('textbox', { name: 'Note title' })).toHaveValue('Shared through IndexedDB')
+
+  await secondPage.getByRole('textbox', { name: 'Text block' }).fill('Edited in the second tab')
+  await expect(secondPage.locator('.save-state')).toContainText('Saved')
+  await expect(page.getByRole('textbox', { name: 'Text block' })).toHaveValue('Edited in the second tab')
+})
+
+test('keeps recovery download available when browser persistence fails', async ({ page }) => {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('chill-notes')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('IndexedDB cleanup was blocked.'))
+    })
+  })
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'indexedDB', {
+      configurable: true,
+      value: { open: () => { throw new DOMException('Unavailable', 'InvalidStateError') } },
+    })
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function setItemWithQuotaFailure(key, value) {
+      if (key === 'chill-notes-v1') throw new DOMException('Full', 'QuotaExceededError')
+      return setItem.call(this, key, value)
+    }
+  })
+  await page.reload()
+
+  const alert = page.getByRole('alert')
+  await expect(alert).toContainText('Your latest changes are not saved')
+  const downloadPromise = page.waitForEvent('download')
+  await alert.getByRole('button', { name: 'Download backup' }).click()
+  const backup = await downloadPromise
+  expect(await backup.failure()).toBeNull()
+})
