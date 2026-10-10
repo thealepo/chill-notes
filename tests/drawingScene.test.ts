@@ -4,10 +4,13 @@ import {
   DRAWING_SCENE_VERSION,
   elementBounds,
   elementsForCanvasPaint,
+  normalizedStroke,
   parseDrawingScene,
   parseDrawingSceneResult,
   resizeElementFromBounds,
+  sceneContentBounds,
   type DrawingElement,
+  type DrawingPoint,
   type DrawingShapeElement,
 } from '../src/lib/drawingScene.ts'
 
@@ -157,4 +160,88 @@ test('resizing lines and arrows preserves their horizontal and vertical directio
       )
     }
   }
+})
+
+test('resizing regular shapes stays anchored and enforces minimum dimensions', () => {
+  const original: DrawingElement = {
+    id: 'rectangle',
+    type: 'rectangle',
+    x: -40,
+    y: 25,
+    width: 120,
+    height: 90,
+    strokeColor: '#493d40',
+    strokeWidth: 3,
+    opacity: 1,
+  }
+  const resized = resizeElementFromBounds(original, -100, 0)
+
+  assert.equal(resized.x, -40)
+  assert.equal(resized.y, 25)
+  assert.equal(resized.width, 12)
+  assert.equal(resized.height, 12)
+  assert.deepEqual(original, { ...original, width: 120, height: 90 }, 'resize is immutable')
+})
+
+test('resizing pressure strokes preserves normalized points and style', () => {
+  const original = normalizedStroke('pen', [
+    { x: 10, y: 20, pressure: 0.2 },
+    { x: 30, y: 50, pressure: 0.8 },
+  ], '#7a4054', 7)
+  const resized = resizeElementFromBounds(original, 400, 160)
+
+  assert.equal(resized.type, 'pen')
+  assert.equal(resized.width, 400)
+  assert.equal(resized.height, 160)
+  assert.equal(resized.strokeColor, '#7a4054')
+  assert.equal(resized.strokeWidth, 7)
+  assert.deepEqual(resized.type === 'pen' ? resized.points : [], original.points)
+  assert.notStrictEqual(resized, original)
+})
+
+test('large scenes parse and compute bounds without spread-argument limits', () => {
+  const elementCount = 12_000
+  const elements = Array.from({ length: elementCount }, (_, index) => ({
+    id: `shape-${index}`,
+    type: 'rectangle',
+    x: index * 2 - 1_000,
+    y: index % 100 * 3 - 50,
+    width: 10,
+    height: 20,
+    strokeColor: '#493d40',
+    strokeWidth: 3,
+    opacity: 1,
+  }))
+  const parsed = parseDrawingScene(JSON.stringify({
+    type: 'chill-drawing',
+    version: DRAWING_SCENE_VERSION,
+    paper: 'grid',
+    elements,
+  }))
+
+  assert.equal(parsed.elements.length, elementCount)
+  assert.equal(parsed.paper, 'grid')
+  assert.deepEqual(sceneContentBounds(parsed), {
+    x: -1_000,
+    y: -50,
+    width: 24_008,
+    height: 317,
+  })
+})
+
+test('normalizing a very large pressure stroke remains stack safe', () => {
+  const points: DrawingPoint[] = Array.from({ length: 25_000 }, (_, index) => ({
+    x: index - 5_000,
+    y: index % 250 - 125,
+    pressure: (index % 10) / 10,
+  }))
+  const stroke = normalizedStroke('highlighter', points, '#e2a83f', 6)
+
+  assert.equal(stroke.points.length, points.length)
+  assert.equal(stroke.x, -5_000)
+  assert.equal(stroke.y, -125)
+  assert.equal(stroke.width, 24_999)
+  assert.equal(stroke.height, 249)
+  assert.deepEqual(stroke.points[0], { x: 0, y: 0, pressure: 0 })
+  assert.deepEqual(stroke.points.at(-1), { x: 1, y: 1, pressure: 0.9 })
 })

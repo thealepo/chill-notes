@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 async function openCleanApp(page: Page) {
   await page.goto('/')
@@ -123,7 +124,47 @@ test('downloads Markdown and PNG exports with safe filenames', async ({ page }) 
   const png = await pngPromise
   expect(png.suggestedFilename()).toBe('test-exports.png')
   expect(await png.failure()).toBeNull()
+  const pngPath = await png.path()
+  expect(pngPath).not.toBeNull()
+  if (pngPath) {
+    const pngBytes = await readFile(pngPath)
+    expect(pngBytes.readUInt32BE(16)).toBe(2656)
+    expect(pngBytes.readUInt32BE(20)).toBe(1696)
+  }
   await expect(page.locator('.drawing-tip')).toContainText('Drawing exported as PNG')
+})
+
+test('omits an unavailable legacy image without blocking PNG export', async ({ page }) => {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('chill-notes')
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('IndexedDB cleanup was blocked.'))
+    })
+    window.localStorage.setItem('chill-notes-v1', JSON.stringify({
+      type: 'chill-notes-workspace',
+      version: 1,
+      notes: [{
+        id: 'legacy-drawing-note',
+        title: 'Legacy drawing',
+        updatedAt: Date.now(),
+        favorite: false,
+        drawing: 'data:image/png;base64,broken-image',
+        blocks: [{ id: 'legacy-drawing-block', kind: 'text', content: '' }],
+      }],
+      tombstones: {},
+    }))
+  })
+  await page.reload()
+  await openDrawing(page)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  const png = await downloadPromise
+
+  expect(await png.failure()).toBeNull()
+  await expect(page.locator('.drawing-tip')).toContainText('Exported without 1 unavailable legacy background image.')
 })
 
 test('keeps the mobile workspace usable at the minimum supported width', async ({ page }) => {
