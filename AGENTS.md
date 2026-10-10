@@ -39,7 +39,8 @@ npm run preview
 - `src/components/NoteEditor.tsx` — stateful block editing, Markdown shortcuts, keyboard behavior, and drag ordering. Its menus, KaTeX previews, and static block configuration live in the adjacent `NoteEditor*` and `noteEditorConfig.ts` modules.
 - `src/components/DrawingCanvas.tsx` — stateful vector-board interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, and history.
 - `src/components/DrawingControls.tsx` and `src/components/DrawingCanvasSurface.tsx` — focused drawing toolbar, selection, zoom, canvas, and inline text presentation.
-- `src/lib/drawingRender.ts` and `src/lib/drawingExport.ts` — canvas painting, legacy-image caching, and full-board PNG export.
+- `src/lib/drawingRender.ts`, `src/lib/drawingExport.ts`, and `src/lib/drawingExportPlan.ts` — canvas painting, legacy-image caching/omission, pure export sizing, and full-board PNG export.
+- `src/lib/drawingHistory.ts` — pure capped-history append and undo/redo boundary helpers.
 - `src/lib/drawingKeyboard.ts` — pure keyboard-canvas helpers for cycling editable objects, moving selected objects, creating centered elements, and accessible element labels.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
@@ -51,7 +52,9 @@ npm run preview
 - `src/types.ts` — canonical note, block, editor-mode, and drawing-tool types.
 - `src/data.ts` — the single blank starter note used when storage is empty or unreadable.
 - `src/styles.css` — all design tokens, layouts, editor/canvas styling, dark theme, responsive behavior, and reduced-motion handling. It includes older base rules followed by later Notion-style refinements; because later selectors intentionally override earlier ones, inspect the whole file before changing or removing a rule.
-- `tests/drawingScene.test.ts` — regression coverage for drawing-version validation and directional line/arrow parsing and resizing across all four quadrants.
+- `tests/drawingScene.test.ts` — regression coverage for drawing-version validation, resize behavior, large-scene bounds, and stack-safe pressure-stroke normalization.
+- `tests/drawingExportPlan.test.ts` — fitted export bounds, unavailable-image omission, empty-board defaults, and maximum PNG dimension coverage.
+- `tests/drawingHistory.test.ts` — history caps, undo/redo boundaries, redo-branch truncation, and snapshot isolation.
 - `tests/drawingKeyboard.test.ts` — regression coverage for keyboard selection order, immutable object movement, and centered object creation.
 - `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `e2e/chill-notes.spec.ts` — Playwright coverage for editor and drawing interactions, persistence, legacy migration, cross-tab sync, storage warnings/failures, downloads, and the minimum mobile viewport.
