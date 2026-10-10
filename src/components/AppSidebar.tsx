@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Download,
   Feather,
+  HardDrive,
   Heart,
   MoreHorizontal,
   Plus,
@@ -15,7 +16,9 @@ import {
 } from 'lucide-react'
 import type { ChangeEventHandler, RefObject } from 'react'
 import type { ThemePreference } from '../hooks/useTheme'
+import type { WorkspaceStorageStatus } from '../hooks/useWorkspaceStorage'
 import { modKeyLabel } from '../lib/platform'
+import { formatStorageSize, type StorageUsage } from '../lib/storageUsage'
 import type { Note } from '../types'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
@@ -32,7 +35,8 @@ interface AppSidebarProps {
   sortOrder: SortOrder
   settingsOpen: boolean
   workspaceMenuOpen: boolean
-  saveFailed: boolean
+  storageStatus: WorkspaceStorageStatus
+  storageUsage: StorageUsage | null
   themePreference: ThemePreference
   searchInputRef: RefObject<HTMLInputElement>
   importInputRef: RefObject<HTMLInputElement>
@@ -80,7 +84,8 @@ export function AppSidebar({
   sortOrder,
   settingsOpen,
   workspaceMenuOpen,
-  saveFailed,
+  storageStatus,
+  storageUsage,
   themePreference,
   searchInputRef,
   importInputRef,
@@ -99,6 +104,16 @@ export function AppSidebar({
   onExportNotes,
   onImportNotes,
 }: AppSidebarProps) {
+  const saveLabel = storageStatus.phase === 'loading'
+    ? 'Loading local notes'
+    : storageStatus.phase === 'saving'
+      ? 'Saving locally…'
+      : storageStatus.phase === 'error'
+        ? 'Not saved — download a backup'
+        : storageStatus.phase === 'warning'
+          ? 'Saved with limited storage'
+          : 'Saved locally'
+
   return (
     <aside className={`sidebar ${open ? 'is-open' : ''}`}>
       <div className="brand-row">
@@ -205,7 +220,7 @@ export function AppSidebar({
 
         <div className="profile-card">
           <div className="avatar">AS</div>
-          <div><strong>Alex's space</strong><span>{saveFailed ? 'Not saved — storage unavailable' : 'Saved locally'}</span></div>
+          <div><strong>Alex's space</strong><span>{saveLabel}</span></div>
           <button
             className="icon-button profile-menu-button"
             onClick={onToggleWorkspaceMenu}
@@ -217,8 +232,17 @@ export function AppSidebar({
           </button>
           {workspaceMenuOpen && (
             <div className="workspace-menu" role="menu">
+              {storageUsage && (
+                <div className={`storage-summary is-${storageUsage.pressure}`} role="status">
+                  <HardDrive size={15} />
+                  <span>
+                    <strong>Browser storage</strong>
+                    <small>{formatStorageSize(storageUsage.usage)} of {formatStorageSize(storageUsage.quota)} used</small>
+                  </span>
+                </div>
+              )}
               <button onClick={onChooseImport} role="menuitem"><Upload size={15} />Import notes</button>
-              <button onClick={onExportNotes} role="menuitem"><Download size={15} />Export all notes</button>
+              <button onClick={onExportNotes} role="menuitem"><Download size={15} />Download backup</button>
             </div>
           )}
           <input

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Menu } from 'lucide-react'
 import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
+import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
@@ -34,6 +35,7 @@ export default function App() {
     workspace: workspaceState,
     setWorkspace: setWorkspaceState,
     status: storageStatus,
+    usage: storageUsage,
     syncedAt,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
   const notes = workspaceState.notes
@@ -48,7 +50,6 @@ export default function App() {
   const [noteMenuOpen, setNoteMenuOpen] = useState(false)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
-  const saveFailed = storageStatus.phase === 'error'
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -316,6 +317,11 @@ export default function App() {
         <Menu size={20} />
       </button>
       {notice && <div className="toast" role="status">{notice}</div>}
+      <StorageRecoveryNotice
+        status={storageStatus}
+        usage={storageUsage}
+        onDownloadBackup={exportNotes}
+      />
 
       <AppSidebar
         open={sidebarOpen}
@@ -327,7 +333,8 @@ export default function App() {
         sortOrder={sortOrder}
         settingsOpen={settingsOpen}
         workspaceMenuOpen={workspaceMenuOpen}
-        saveFailed={saveFailed}
+        storageStatus={storageStatus}
+        storageUsage={storageUsage}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
         importInputRef={importInputRef}
@@ -360,7 +367,7 @@ export default function App() {
       <NoteWorkspace
         note={activeNote}
         mode={mode}
-        saveFailed={saveFailed}
+        saveStatus={storageStatus.phase}
         focusMode={focusMode}
         noteMenuOpen={noteMenuOpen}
         titleInputRef={titleInputRef}
