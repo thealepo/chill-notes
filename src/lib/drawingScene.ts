@@ -245,10 +245,16 @@ export function normalizedStroke(
   strokeColor: string,
   strokeWidth: number,
 ): DrawingStrokeElement {
-  const minX = Math.min(...points.map((point) => point.x))
-  const minY = Math.min(...points.map((point) => point.y))
-  const maxX = Math.max(...points.map((point) => point.x))
-  const maxY = Math.max(...points.map((point) => point.y))
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    minY = Math.min(minY, point.y)
+    maxX = Math.max(maxX, point.x)
+    maxY = Math.max(maxY, point.y)
+  }
   const width = Math.max(1, maxX - minX)
   const height = Math.max(1, maxY - minY)
   return {
@@ -348,10 +354,16 @@ export function topElementAt(scene: DrawingScene, point: DrawingPoint, tolerance
 
 export function sceneContentBounds(scene: DrawingScene): ElementBounds | null {
   if (scene.elements.length === 0) return null
-  const bounds = scene.elements.map(elementBounds)
-  const x = Math.min(...bounds.map((item) => item.x))
-  const y = Math.min(...bounds.map((item) => item.y))
-  const right = Math.max(...bounds.map((item) => item.x + item.width))
-  const bottom = Math.max(...bounds.map((item) => item.y + item.height))
+  let x = Number.POSITIVE_INFINITY
+  let y = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.NEGATIVE_INFINITY
+  for (const element of scene.elements) {
+    const bounds = elementBounds(element)
+    x = Math.min(x, bounds.x)
+    y = Math.min(y, bounds.y)
+    right = Math.max(right, bounds.x + bounds.width)
+    bottom = Math.max(bottom, bounds.y + bounds.height)
+  }
   return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) }
 }
