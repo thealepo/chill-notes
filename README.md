@@ -44,7 +44,7 @@ npm ci
 npm run dev
 ```
 
-Run `npm run check` to execute the same lint and production-build checks as CI.
+Run `npx playwright install chromium` once to install the browser used by the interaction tests. Then run `npm run check` to execute the same lint, Node tests, production build, and Playwright browser tests as CI. Use `npm run test:e2e` to run only the production build and browser tests.
 
 ## Future Features
 
