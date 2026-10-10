@@ -14,8 +14,6 @@ export function waitForImageLoad(image: LoadableImage, timeoutMs = 5_000): Promi
   if (image.complete) return Promise.resolve(image.naturalWidth > 0 ? 'loaded' : 'error')
 
   return new Promise((resolve) => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-
     const finish = (status: ImageLoadStatus) => {
       image.removeEventListener('load', handleLoad)
       image.removeEventListener('error', handleError)
@@ -28,11 +26,12 @@ export function waitForImageLoad(image: LoadableImage, timeoutMs = 5_000): Promi
     image.addEventListener('load', handleLoad, { once: true })
     image.addEventListener('error', handleError, { once: true })
 
-    if (image.complete) {
-      finish(image.naturalWidth > 0 ? 'loaded' : 'error')
-      return
-    }
-
-    timeoutId = setTimeout(() => finish('timeout'), Math.max(0, timeoutMs))
+    const completedStatus: ImageLoadStatus | undefined = image.complete
+      ? image.naturalWidth > 0 ? 'loaded' : 'error'
+      : undefined
+    const timeoutId = completedStatus === undefined
+      ? setTimeout(() => finish('timeout'), Math.max(0, timeoutMs))
+      : undefined
+    if (completedStatus !== undefined) finish(completedStatus)
   })
 }
