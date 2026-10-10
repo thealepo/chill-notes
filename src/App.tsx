@@ -1,23 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
-import {
-  AlertCircle,
-  Archive,
-  Command,
-  Copy,
-  Feather,
-  FileText,
-  Heart,
-  ImagePlus,
-  Menu,
-  MoreHorizontal,
-  RotateCcw,
-  SmilePlus,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
-import { DrawingCanvas } from './components/DrawingCanvas'
-import { NoteEditor } from './components/NoteEditor'
+import { NoteWorkspace } from './components/NoteWorkspace'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
 import {
@@ -58,10 +42,6 @@ function autosizeTitle(element: HTMLTextAreaElement | null) {
   if (!element) return
   element.style.height = '0px'
   element.style.height = `${element.scrollHeight}px`
-}
-
-function focusFirstBlock() {
-  document.querySelector<HTMLTextAreaElement>('.notion-editor .block-content textarea')?.focus()
 }
 
 function blankNote(): Note {
@@ -432,106 +412,27 @@ export default function App() {
 
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
 
-      <main className="workspace">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <span>{activeNote.archived ? 'Archive' : 'Notes'}</span><span>/</span><strong>{activeNote.title || 'Untitled note'}</strong>
-          </div>
-          <div className="topbar-mode-switcher" role="tablist" aria-label="Note mode">
-            <button className={mode === 'type' ? 'active' : ''} onClick={() => setMode('type')} role="tab" aria-selected={mode === 'type'}>
-              <Command size={15} />Type
-            </button>
-            <button className={mode === 'draw' ? 'active' : ''} onClick={() => setMode('draw')} role="tab" aria-selected={mode === 'draw'}>
-              <Feather size={15} />Draw
-            </button>
-          </div>
-          <div className="topbar-actions">
-            <span className={`save-state ${saveFailed ? 'is-error' : ''}`} role="status">
-              {saveFailed ? <AlertCircle size={13} /> : <span className="save-dot" />}
-              {saveFailed ? 'Not saved' : 'Saved'}
-            </span>
-            <button className="focus-button topbar-focus" onClick={() => setFocusMode((current) => !current)} aria-pressed={focusMode}>
-              {focusMode ? 'Leave focus' : 'Focus'}
-            </button>
-            <button className={`icon-button ${activeNote.favorite ? 'favorite' : ''}`} onClick={toggleFavorite} aria-label={activeNote.favorite ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={activeNote.favorite}>
-              <Heart size={18} fill={activeNote.favorite ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              className={`icon-button ${noteMenuOpen ? 'is-open' : ''}`}
-              onClick={() => { setNoteMenuOpen((current) => !current); setSettingsOpen(false); setWorkspaceMenuOpen(false) }}
-              aria-label="Note options"
-              aria-expanded={noteMenuOpen}
-              data-menu-trigger
-            >
-              <MoreHorizontal size={20} />
-            </button>
-            {noteMenuOpen && (
-              <div className="note-menu" role="menu">
-                <button onClick={exportActiveNoteAsMarkdown} role="menuitem"><FileText size={15} />Export as Markdown</button>
-                <button onClick={duplicateActiveNote} role="menuitem"><Copy size={15} />Duplicate</button>
-                <button onClick={toggleArchive} role="menuitem">
-                  {activeNote.archived ? <RotateCcw size={15} /> : <Archive size={15} />}
-                  {activeNote.archived ? 'Restore' : 'Archive'}
-                </button>
-                <button className="danger" onClick={deleteActiveNote} role="menuitem"><Trash2 size={15} />Delete</button>
-              </div>
-            )}
-          </div>
-        </header>
-
-        <div className="workspace-scroll">
-          <div className={`note-page mode-${mode}`}>
-            {activeNote.hasCover && (
-              <div className="page-cover" aria-label="Page cover">
-                <button onClick={() => updateNote({ ...activeNote, hasCover: false, updatedAt: Date.now() })}><X size={14} />Remove cover</button>
-              </div>
-            )}
-
-            <div className="document-column">
-              {activeNote.pageIcon && (
-                <button className="page-icon" onClick={() => updateNote({ ...activeNote, pageIcon: undefined, updatedAt: Date.now() })} title="Remove icon" aria-label="Remove page icon">
-                  {activeNote.pageIcon}
-                </button>
-              )}
-
-              <div className="page-customize-actions">
-                {!activeNote.pageIcon && (
-                  <button onClick={() => updateNote({ ...activeNote, pageIcon: '🌸', updatedAt: Date.now() })}><SmilePlus size={14} />Add icon</button>
-                )}
-                {!activeNote.hasCover && (
-                  <button onClick={() => updateNote({ ...activeNote, hasCover: true, updatedAt: Date.now() })}><ImagePlus size={14} />Add cover</button>
-                )}
-              </div>
-
-              <textarea
-                ref={titleInputRef}
-                className="title-input"
-                rows={1}
-                value={activeNote.title}
-                onChange={(event) => updateNote({ ...activeNote, title: event.target.value.replace(/\r?\n/g, ' '), updatedAt: Date.now() })}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
-                  event.preventDefault()
-                  if (mode === 'type') focusFirstBlock()
-                }}
-                aria-label="Note title"
-                placeholder="Untitled"
-              />
-
-              {mode === 'type' ? (
-                <NoteEditor key={activeNote.id} note={activeNote} onChange={updateNote} />
-              ) : (
-                <DrawingCanvas
-                  key={activeNote.id}
-                  initialDrawing={activeNote.drawing}
-                  onChange={(drawing) => updateNote({ ...activeNote, drawing, updatedAt: Date.now() })}
-                  noteTitle={activeNote.title}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
+      <NoteWorkspace
+        note={activeNote}
+        mode={mode}
+        saveFailed={saveFailed}
+        focusMode={focusMode}
+        noteMenuOpen={noteMenuOpen}
+        titleInputRef={titleInputRef}
+        onModeChange={setMode}
+        onToggleFocus={() => setFocusMode((current) => !current)}
+        onToggleFavorite={toggleFavorite}
+        onToggleNoteMenu={() => {
+          setNoteMenuOpen((current) => !current)
+          setSettingsOpen(false)
+          setWorkspaceMenuOpen(false)
+        }}
+        onExportMarkdown={exportActiveNoteAsMarkdown}
+        onDuplicate={duplicateActiveNote}
+        onToggleArchive={toggleArchive}
+        onDelete={deleteActiveNote}
+        onUpdateNote={updateNote}
+      />
     </div>
   )
 }
