@@ -1,40 +1,25 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import katex from 'katex'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Braces,
-  CheckSquare,
-  ChevronRight,
-  Code2,
-  Copy,
   GripVertical,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-  Minus,
-  Pilcrow,
   Plus,
-  Quote,
-  Sigma,
-  Trash2,
-  Type,
 } from 'lucide-react'
-import { modKeyLabel } from '../lib/platform'
+import { NoteEditorActionsMenu, NoteEditorCommandMenu } from './NoteEditorMenus'
+import { InlineMathPreview, MathPreview } from './NoteMathPreview'
+import {
+  blockCommands,
+  blockLabels,
+  commandMatches,
+  flowingBlockKinds,
+  listBlockKinds,
+  placeholderForBlock,
+  structuralBlockKinds,
+} from './noteEditorConfig'
 import type { BlockKind, Note, NoteBlock } from '../types'
 
 interface NoteEditorProps {
   note: Note
   onChange: (note: Note) => void
-}
-
-interface BlockCommand {
-  kind: BlockKind
-  label: string
-  description: string
-  aliases: string[]
-  group: 'Basic blocks' | 'Advanced'
-  icon: typeof Type
 }
 
 type DropPosition = 'before' | 'after'
@@ -43,89 +28,9 @@ type CaretPosition = 'start' | 'end' | number
 const BLOCK_DRAG_TYPE = 'application/x-chill-notes-block'
 const MAX_SLASH_QUERY = 24
 
-const commands: BlockCommand[] = [
-  { kind: 'text', label: 'Text', description: 'Plain text block', aliases: ['plain', 'paragraph'], group: 'Basic blocks', icon: Type },
-  { kind: 'heading1', label: 'Heading 1', description: 'Large section heading', aliases: ['h1', '#'], group: 'Basic blocks', icon: Heading1 },
-  { kind: 'heading2', label: 'Heading 2', description: 'Medium section heading', aliases: ['h2', '##'], group: 'Basic blocks', icon: Heading2 },
-  { kind: 'heading3', label: 'Heading 3', description: 'Small section heading', aliases: ['h3', '###'], group: 'Basic blocks', icon: Heading3 },
-  { kind: 'bullet', label: 'Bulleted list', description: 'Create a simple list', aliases: ['bullet', 'ul', '-'], group: 'Basic blocks', icon: List },
-  { kind: 'numbered', label: 'Numbered list', description: 'Create an ordered list', aliases: ['number', 'ol', '1.'], group: 'Basic blocks', icon: ListOrdered },
-  { kind: 'checklist', label: 'To-do list', description: 'Track a task with a checkbox', aliases: ['todo', 'checkbox', '[]'], group: 'Basic blocks', icon: CheckSquare },
-  { kind: 'quote', label: 'Quote', description: 'Capture a quotation', aliases: ['quote', 'citation'], group: 'Basic blocks', icon: Quote },
-  { kind: 'divider', label: 'Divider', description: 'Visually divide the page', aliases: ['divider', 'line', '---'], group: 'Basic blocks', icon: Minus },
-  { kind: 'code', label: 'Code', description: 'Write a code snippet', aliases: ['code', 'snippet'], group: 'Advanced', icon: Code2 },
-  { kind: 'math', label: 'Block equation', description: 'Display a LaTeX equation', aliases: ['math', 'latex', 'equation'], group: 'Advanced', icon: Sigma },
-]
-
-const listKinds: BlockKind[] = ['bullet', 'numbered', 'checklist']
-const structuralKinds: BlockKind[] = ['heading1', 'heading2', 'heading3', 'bullet', 'numbered', 'checklist', 'quote', 'code']
-/** Blocks whose text can be split by Enter or merged by Backspace. */
-const flowingKinds: BlockKind[] = ['text', 'heading1', 'heading2', 'heading3', 'bullet', 'numbered', 'checklist', 'quote']
-
-const blockLabels = Object.fromEntries(commands.map((command) => [command.kind, command.label])) as Record<BlockKind, string>
-
-/**
- * Inline math: `$$...$$`, or `$...$` where the delimiters hug the expression
- * and the closing `$` is not followed by a digit (so "$5 and $10" stays text).
- */
-const INLINE_MATH_PATTERN = /(\$\$[^$]+\$\$|\$(?!\s)[^$\n]*?[^\s$]\$(?!\d))/g
-
-function MathPreview({ expression, displayMode = true }: { expression: string; displayMode?: boolean }) {
-  const rendered = useMemo(() => {
-    if (!expression.trim()) return ''
-    try {
-      return katex.renderToString(expression, { displayMode, throwOnError: false, strict: false })
-    } catch {
-      return ''
-    }
-  }, [expression, displayMode])
-
-  if (!rendered) return <span className="math-placeholder">Type a LaTeX expression…</span>
-  return <span dangerouslySetInnerHTML={{ __html: rendered }} />
-}
-
-function InlineMathPreview({ content }: { content: string }) {
-  const parts = content.split(INLINE_MATH_PATTERN)
-  if (parts.length === 1) return null
-  return (
-    <div className="inline-math-preview" aria-label="Rendered inline equation preview">
-      {parts.map((part, index) => {
-        // String.split with a capturing group places matches at odd indexes.
-        if (index % 2 === 1) {
-          const expression = part.startsWith('$$') ? part.slice(2, -2) : part.slice(1, -1)
-          return <MathPreview key={index} expression={expression} displayMode={false} />
-        }
-        return part ? <span key={index}>{part}</span> : null
-      })}
-    </div>
-  )
-}
-
-function commandMatches(command: BlockCommand, query: string) {
-  const haystack = [command.label, command.description, ...command.aliases].join(' ').toLowerCase()
-  return haystack.includes(query.trim().toLowerCase())
-}
-
 function autosizeBlock(element: HTMLTextAreaElement) {
   element.style.height = '0px'
   element.style.height = `${element.scrollHeight}px`
-}
-
-function placeholderFor(kind: BlockKind, focused: boolean, onlyBlock: boolean) {
-  switch (kind) {
-    case 'math': return 'Type LaTeX…'
-    case 'code': return 'Write some code…'
-    case 'heading1': return 'Heading 1'
-    case 'heading2': return 'Heading 2'
-    case 'heading3': return 'Heading 3'
-    case 'divider': return ''
-    default:
-      if (!focused && !onlyBlock) return ''
-      if (kind === 'bullet' || kind === 'numbered') return 'List'
-      if (kind === 'checklist') return 'To-do'
-      if (kind === 'quote') return 'Quote'
-      return "Type '/' for commands"
-  }
 }
 
 export function NoteEditor({ note, onChange }: NoteEditorProps) {
@@ -295,7 +200,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
     const slashOpen = isSlashOpen(block)
     const menuOpen = slashOpen || insertMenuBlock === block.id
     const query = slashOpen ? block.content.slice(1) : ''
-    const filtered = commands.filter((command) => commandMatches(command, query))
+    const filtered = blockCommands.filter((command) => commandMatches(command, query))
     const mod = event.metaKey || event.ctrlKey
 
     if (event.key === 'Escape' && (menuOpen || actionsBlock === block.id)) {
@@ -364,12 +269,12 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
         addBlock('text', block.id, { patchCurrent: { kind: 'divider', content: '' } })
         return
       }
-      if (!block.content && structuralKinds.includes(block.kind)) {
+      if (!block.content && structuralBlockKinds.includes(block.kind)) {
         updateBlock(block.id, { kind: 'text', checked: false })
         return
       }
-      const nextKind = listKinds.includes(block.kind) ? block.kind : 'text'
-      if (flowingKinds.includes(block.kind) && selectionEnd < block.content.length) {
+      const nextKind = listBlockKinds.includes(block.kind) ? block.kind : 'text'
+      if (flowingBlockKinds.includes(block.kind) && selectionEnd < block.content.length) {
         // Split the block at the caret, moving the remaining text to the new block.
         addBlock(nextKind, block.id, {
           content: block.content.slice(selectionEnd),
@@ -389,14 +294,14 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
         else removeBlock(block.id)
         return
       }
-      if (block.kind !== 'text' && flowingKinds.includes(block.kind)) {
+      if (block.kind !== 'text' && flowingBlockKinds.includes(block.kind)) {
         event.preventDefault()
         updateBlock(block.id, { kind: 'text', checked: false })
         focusBlock(block.id, 'start')
         return
       }
       const previous = note.blocks[blockIndex - 1]
-      if (block.kind === 'text' && previous && flowingKinds.includes(previous.kind)) {
+      if (block.kind === 'text' && previous && flowingBlockKinds.includes(previous.kind)) {
         // Merge this paragraph into the previous text-like block.
         event.preventDefault()
         const junction = previous.content.length
@@ -464,9 +369,8 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
           const slashOpen = isSlashOpen(block)
           const menuOpen = slashOpen || insertMenuBlock === block.id
           const query = slashOpen ? block.content.slice(1) : ''
-          const filteredCommands = commands.filter((command) => commandMatches(command, query))
+          const filteredCommands = blockCommands.filter((command) => commandMatches(command, query))
           const dropClass = dropTarget?.id === block.id && draggingId !== block.id ? `drop-${dropTarget.position}` : ''
-          let currentGroup = ''
           return (
             <div
               className={`editor-block kind-${block.kind} ${dropClass} ${draggingId === block.id ? 'is-dragging' : ''}`}
@@ -539,7 +443,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
                     window.setTimeout(() => setFocusedBlock((current) => (current === block.id ? null : current)), 140)
                   }}
                   onKeyDown={(event) => handleKeyDown(event, block, blockIndex)}
-                  placeholder={placeholderFor(block.kind, focusedBlock === block.id, note.blocks.length === 1)}
+                  placeholder={placeholderForBlock(block.kind, focusedBlock === block.id, note.blocks.length === 1)}
                   aria-label={`${blockLabels[block.kind]} block`}
                   className={`${block.checked ? 'completed' : ''} ${block.kind === 'divider' ? 'divider-input' : ''}`}
                 />
@@ -548,44 +452,27 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
                 {!['math', 'divider', 'code'].includes(block.kind) && <InlineMathPreview content={block.content} />}
 
                 {menuOpen && (
-                  <div className="slash-menu" role="listbox" aria-label={slashOpen ? 'Insert a block' : 'Turn block into'}>
-                    <div className="slash-search"><Pilcrow size={14} /><span>{query ? `Results for “${query}”` : slashOpen ? 'Choose a block' : 'Turn into'}</span></div>
-                    <div className="slash-results">
-                      {filteredCommands.map((command, index) => {
-                        const Icon = command.icon
-                        const showGroup = command.group !== currentGroup
-                        currentGroup = command.group
-                        return (
-                          <div key={command.kind}>
-                            {showGroup && <div className="slash-title">{command.group}</div>}
-                            <button
-                              className={index === menuIndex ? 'selected' : ''}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onMouseEnter={() => setMenuIndex(index)}
-                              onClick={() => applyCommand(block.id, command.kind, slashOpen)}
-                              role="option"
-                              aria-selected={index === menuIndex}
-                            >
-                              <span className="command-icon"><Icon size={17} /></span>
-                              <span><strong>{command.label}</strong><small>{command.description}</small></span>
-                              <ChevronRight size={14} />
-                            </button>
-                          </div>
-                        )
-                      })}
-                      {filteredCommands.length === 0 && <div className="no-command-results">No blocks found</div>}
-                    </div>
-                    <div className="slash-footer"><span>↑↓ navigate</span><span>↵ select</span><span>esc close</span></div>
-                  </div>
+                  <NoteEditorCommandMenu
+                    fromSlash={slashOpen}
+                    query={query}
+                    commands={filteredCommands}
+                    selectedIndex={menuIndex}
+                    onSelectIndex={setMenuIndex}
+                    onApply={(kind) => applyCommand(block.id, kind, slashOpen)}
+                  />
                 )}
 
                 {actionsBlock === block.id && (
-                  <div className="block-actions-menu" role="menu" aria-label="Block actions">
-                    <div className="slash-title">Block actions</div>
-                    <button role="menuitem" onClick={() => { setActionsBlock(null); setMenuIndex(0); setInsertMenuBlock(block.id); focusBlock(block.id) }}><Type size={15} />Turn into…</button>
-                    <button role="menuitem" onClick={() => duplicateBlock(block.id)}><Copy size={15} />Duplicate <kbd>{modKeyLabel}+D</kbd></button>
-                    <button role="menuitem" className="danger" onClick={() => removeBlock(block.id)}><Trash2 size={15} />Delete</button>
-                  </div>
+                  <NoteEditorActionsMenu
+                    onTurnInto={() => {
+                      setActionsBlock(null)
+                      setMenuIndex(0)
+                      setInsertMenuBlock(block.id)
+                      focusBlock(block.id)
+                    }}
+                    onDuplicate={() => duplicateBlock(block.id)}
+                    onDelete={() => removeBlock(block.id)}
+                  />
                 )}
               </div>
             </div>

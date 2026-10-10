@@ -27,15 +27,18 @@ npm run check
 npm run preview
 ```
 
-`npm run check` is the standard local verification and runs lint, the Node test suite, and the production build. The build uses TypeScript project references before Vite bundles the app. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, and then runs `npm run check`.
+`npm run check` is the standard local verification and runs lint, the Node test suite, the production build, and the Playwright browser suite. The build uses TypeScript project references before Vite bundles the app. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, installs Chromium, and then runs `npm run check`.
 
 ## Repository map
 
 - `index.html` — Vite shell and an inline pre-paint theme bootstrap that prevents a light/dark flash. Keep its storage-key and theme-color behavior aligned with `useTheme`.
 - `src/main.tsx` — React entry point; imports global CSS and KaTeX CSS.
-- `src/App.tsx` — application shell and top-level state. Owns notes, selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, persistence, note-level import/export, and the type/draw mode switch.
-- `src/components/NoteEditor.tsx` — block editing, slash commands, Markdown shortcuts, keyboard behavior, drag ordering, block actions, and KaTeX previews.
-- `src/components/DrawingCanvas.tsx` — editable vector board rendering and interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, history, paper styles, legacy image rendering, and PNG export.
+- `src/App.tsx` — top-level workspace state and orchestration. Owns notes, selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, persistence, note-level import/export, and the type/draw mode switch.
+- `src/components/AppSidebar.tsx` and `src/components/NoteWorkspace.tsx` — focused app-shell presentation for navigation/settings and the active note surface.
+- `src/components/NoteEditor.tsx` — stateful block editing, Markdown shortcuts, keyboard behavior, and drag ordering. Its menus, KaTeX previews, and static block configuration live in the adjacent `NoteEditor*` and `noteEditorConfig.ts` modules.
+- `src/components/DrawingCanvas.tsx` — stateful vector-board interactions: pressure ink, shapes, text/stickies, object selection, move/resize/layer actions, pan/zoom, and history.
+- `src/components/DrawingControls.tsx` and `src/components/DrawingCanvasSurface.tsx` — focused drawing toolbar, selection, zoom, canvas, and inline text presentation.
+- `src/lib/drawingRender.ts` and `src/lib/drawingExport.ts` — canvas painting, legacy-image caching, and full-board PNG export.
 - `src/lib/drawingKeyboard.ts` — pure keyboard-canvas helpers for cycling editable objects, moving selected objects, creating centered elements, and accessible element labels.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
