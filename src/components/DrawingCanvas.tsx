@@ -3,9 +3,9 @@ import {
   AlertTriangle,
   Download,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react'
-import { DrawingSelectionToolbar, DrawingToolbar, DrawingZoomControls } from './DrawingControls'
+import { DrawingCanvasSurface } from './DrawingCanvasSurface'
+import { DrawingSelectionToolbar, DrawingToolbar } from './DrawingControls'
 import { drawingColors, drawingTools } from './drawingControlsConfig'
 import {
   DRAWING_SCENE_VERSION,
@@ -836,67 +836,32 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
         />
       )}
 
-      <div className="canvas-shell">
-        <div className="canvas-corner-label"><Sparkles size={13} /> editable freeform space</div>
-        <div className="canvas-frame" ref={frameRef}>
-          <p id={keyboardInstructionsId} className="visually-hidden">
-            Focus the canvas, then press V and Enter to select an object. Press Enter again to select the next object, or Shift Enter for the previous object. Use arrow keys to move the selected object and hold Shift to move ten pixels. Press a shape shortcut, then Enter, to create at the center. Press Delete to remove the selected object and Escape to clear the selection.
-          </p>
-          <div id={keyboardStatusId} className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-            {keyboardStatus}
-          </div>
-          <canvas
-            ref={canvasRef}
-            tabIndex={0}
-            role="application"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishGesture}
-            onPointerCancel={finishGesture}
-            onLostPointerCapture={finishGesture}
-            onKeyDown={handleCanvasKeyDown}
-            onKeyUp={handleCanvasKeyUp}
-            onBlur={() => {
-              finishKeyboardMove()
-              spacePanningRef.current = false
-            }}
-            onWheel={handleWheel}
-            onContextMenu={(event) => event.preventDefault()}
-            aria-label={`Editable drawing canvas. ${activeToolLabel} tool active.`}
-            aria-describedby={`${keyboardInstructionsId} ${keyboardStatusId}`}
-            aria-keyshortcuts="Enter Shift+Enter ArrowUp ArrowDown ArrowLeft ArrowRight Delete Backspace Escape V H P M E R O L A T S"
-            style={{ cursor }}
-          />
-          {editingElement && (
-            <textarea
-              ref={textInputRef}
-              className={`canvas-text-editor ${editingElement.type}`}
-              value={editingElement.text}
-              onChange={(event) => updateEditingText(event.target.value)}
-              onBlur={finishTextEditing}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' || ((event.metaKey || event.ctrlKey) && event.key === 'Enter')) {
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                }
-              }}
-              placeholder={editingElement.type === 'sticky' ? 'Write a note…' : 'Type something…'}
-              aria-label={editingElement.type === 'sticky' ? 'Edit sticky note' : 'Edit canvas text'}
-              style={{
-                left: viewport.x + editingElement.x * viewport.zoom,
-                top: viewport.y + editingElement.y * viewport.zoom,
-                width: editingElement.width * viewport.zoom,
-                height: editingElement.height * viewport.zoom,
-                fontSize: editingElement.fontSize * viewport.zoom,
-                color: editingElement.strokeColor,
-                background: editingElement.type === 'sticky' ? editingElement.fillColor : 'transparent',
-                padding: editingElement.type === 'sticky' ? 18 * viewport.zoom : 2,
-              }}
-            />
-          )}
-          <DrawingZoomControls zoom={viewport.zoom} onZoom={zoomBy} onFit={fitToContent} />
-        </div>
-      </div>
+      <DrawingCanvasSurface
+        frameRef={frameRef}
+        canvasRef={canvasRef}
+        textInputRef={textInputRef}
+        keyboardInstructionsId={keyboardInstructionsId}
+        keyboardStatusId={keyboardStatusId}
+        keyboardStatus={keyboardStatus}
+        activeToolLabel={activeToolLabel}
+        cursor={cursor}
+        editingElement={editingElement}
+        viewport={viewport}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerFinish={finishGesture}
+        onKeyDown={handleCanvasKeyDown}
+        onKeyUp={handleCanvasKeyUp}
+        onCanvasBlur={() => {
+          finishKeyboardMove()
+          spacePanningRef.current = false
+        }}
+        onWheel={handleWheel}
+        onUpdateEditingText={updateEditingText}
+        onFinishTextEditing={finishTextEditing}
+        onZoom={zoomBy}
+        onFit={fitToContent}
+      />
       <div className="drawing-tip" role="status" aria-live="polite" aria-atomic="true">
         {exportStatus
           ? <><Download size={14} />{exportStatus}</>
