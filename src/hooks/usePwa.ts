@@ -12,6 +12,8 @@ interface BeforeInstallPromptEvent extends Event {
 export type PwaInstallMode = 'native' | 'ios' | 'none'
 export type PwaInstallResult = InstallChoice | 'manual' | 'unavailable'
 
+const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000
+
 function isStandalone() {
   const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
   return window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true
@@ -28,12 +30,14 @@ export function usePwa() {
   const [installed, setInstalled] = useState(isStandalone)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [registrationFailed, setRegistrationFailed] = useState(false)
+  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW({
     immediate: true,
+    onRegisteredSW: (_scriptUrl, nextRegistration) => setRegistration(nextRegistration ?? null),
     onRegisterError: () => setRegistrationFailed(true),
   })
 
@@ -80,6 +84,21 @@ export function usePwa() {
   useEffect(() => {
     document.documentElement.dataset.displayMode = installed ? 'standalone' : 'browser'
   }, [installed])
+
+  useEffect(() => {
+    if (!registration) return
+
+    function checkForUpdate() {
+      if (navigator.onLine) void registration?.update().catch(() => undefined)
+    }
+
+    const interval = window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL)
+    window.addEventListener('online', checkForUpdate)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('online', checkForUpdate)
+    }
+  }, [registration])
 
   const installMode = useMemo<PwaInstallMode>(() => {
     if (installed) return 'none'

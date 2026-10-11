@@ -60,7 +60,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         navigateFallback: 'index.html',
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2,ttf}'],
       },
     }),
   ],

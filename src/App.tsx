@@ -64,7 +64,7 @@ export default function App() {
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const pwa = usePwa()
   const { dismissOfflineReady, offlineReady } = pwa
-  const previousOnlineRef = useRef(pwa.online)
+  const previousOnlineRef = useRef(true)
 
   const setNotes = useCallback((update: SetStateAction<Note[]>) => {
     setWorkspaceState((current) => ({
