@@ -1,4 +1,4 @@
-import { devices, expect, test, type CDPSession, type Page } from '@playwright/test'
+import { devices, expect, test, type BrowserContext, type CDPSession, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
 const DATABASE_NAME = 'chill-notes'
@@ -31,6 +31,35 @@ async function waitForServiceWorkerControl(page: Page) {
     () => page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
     { timeout: 15_000 },
   ).toBe(true)
+}
+
+async function stageWaitingUpdate(page: Page, context: BrowserContext) {
+  const workerSource = await readFile(new URL('../dist/sw.js', import.meta.url), 'utf8')
+  await context.route('**/pwa-bootstrap', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><title>PWA bootstrap</title>',
+  }))
+  await context.route('**/sw.js?fixture=old', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    headers: { 'Service-Worker-Allowed': '/' },
+    body: `${workerSource}\n// fixture-old-worker`,
+  }))
+
+  await page.goto('/pwa-bootstrap')
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.register('/sw.js?fixture=old', { scope: '/' })
+    await navigator.serviceWorker.ready
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((resolve) => {
+        navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true })
+      })
+    }
+  })
+
+  await page.goto('/')
+  await expect(page.getByText('A fresh version is ready')).toBeVisible({ timeout: 15_000 })
 }
 
 async function decodedImage(page: Page, source: string) {
@@ -279,48 +308,8 @@ test('reloads saved notes and all critical assets from the service worker while 
 })
 
 test('prompts for a real waiting-worker update and preserves notes through activation', async ({ page, context }) => {
-  const workerSource = await readFile(new URL('../dist/sw.js', import.meta.url), 'utf8')
-  await context.route('**/pwa-bootstrap', (route) => route.fulfill({
-    status: 200,
-    contentType: 'text/html',
-    body: '<!doctype html><title>PWA bootstrap</title>',
-  }))
-  await context.route('**/sw.js?fixture=old', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/javascript',
-    headers: { 'Service-Worker-Allowed': '/' },
-    body: `${workerSource}\n// fixture-old-worker`,
-  }))
-
-  await page.goto('/pwa-bootstrap')
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.register('/sw.js?fixture=old', { scope: '/' })
-    await navigator.serviceWorker.ready
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => {
-        navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true })
-      })
-    }
-  })
-
-  await page.goto('/')
-  await expect(page.getByText('A fresh version is ready')).toBeVisible({ timeout: 15_000 })
+  await stageWaitingUpdate(page, context)
   await page.getByRole('textbox', { name: 'Note title' }).fill('Survives the app update')
-  await expect.poll(() => page.evaluate(async () => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('chill-notes')
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
-    const stored = await new Promise<unknown>((resolve, reject) => {
-      const request = database.transaction('workspace', 'readonly').objectStore('workspace').get('current')
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
-    database.close()
-    const workspace = JSON.parse(String(stored)) as { notes?: Array<{ title?: string }> }
-    return workspace.notes?.some((note) => note.title === 'Survives the app update') ?? false
-  })).toBe(true)
 
   const navigated = page.waitForEvent('framenavigated', { timeout: 15_000 })
   await page.getByRole('button', { name: 'Update now' }).click()
@@ -335,6 +324,49 @@ test('prompts for a real waiting-worker update and preserves notes through activ
       waiting: registration?.waiting?.scriptURL ?? '',
     }
   })).toEqual({ controller: 'http://127.0.0.1:4173/sw.js', waiting: '' })
+})
+
+test('does not reload an unsafe tab when another tab activates the update', async ({ page, context }) => {
+  await stageWaitingUpdate(page, context)
+
+  const unsafePage = await context.newPage()
+  await unsafePage.addInitScript(() => {
+    Object.defineProperty(window, 'indexedDB', {
+      configurable: true,
+      value: { open: () => { throw new DOMException('Unavailable', 'InvalidStateError') } },
+    })
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function setItemWithQuotaFailure(key, value) {
+      if (key === 'chill-notes-v1') throw new DOMException('Full', 'QuotaExceededError')
+      return setItem.call(this, key, value)
+    }
+  })
+  await unsafePage.goto('/')
+  await expect(unsafePage.getByRole('alert')).toContainText('Your latest changes are not saved')
+  await expect(unsafePage.getByText('A fresh version is ready')).toBeVisible({ timeout: 15_000 })
+  await unsafePage.evaluate(() => {
+    ;(window as typeof window & { __updateReloadGuard?: string }).__updateReloadGuard = 'still-here'
+  })
+
+  const updatedTabNavigated = page.waitForEvent('framenavigated', { timeout: 15_000 })
+  await page.getByRole('button', { name: 'Update now' }).click()
+  await updatedTabNavigated
+
+  await expect(unsafePage.locator('.toast')).toContainText('Update paused because your latest changes are not saved')
+  expect(await unsafePage.evaluate(() => (
+    window as typeof window & { __updateReloadGuard?: string }
+  ).__updateReloadGuard)).toBe('still-here')
+  await expect(unsafePage.getByRole('button', { name: 'Update now' })).toBeEnabled()
+  await expect.poll(() => unsafePage.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration()
+    return {
+      controller: navigator.serviceWorker.controller?.scriptURL ?? '',
+      waiting: registration?.waiting?.scriptURL ?? '',
+    }
+  })).toEqual({
+    controller: 'http://127.0.0.1:4173/sw.js',
+    waiting: '',
+  })
 })
 
 test.describe('coarse touch mobile PWA', () => {

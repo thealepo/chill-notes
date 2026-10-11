@@ -31,12 +31,14 @@ export function usePwa() {
   const [online, setOnline] = useState(() => navigator.onLine)
   const [registrationFailed, setRegistrationFailed] = useState(false)
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
+  const [reloadNeeded, setReloadNeeded] = useState(false)
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW({
     immediate: true,
+    onNeedReload: () => setReloadNeeded(true),
     onRegisteredSW: (_scriptUrl, nextRegistration) => setRegistration(nextRegistration ?? null),
     onRegisterError: () => setRegistrationFailed(true),
   })
@@ -116,6 +118,7 @@ export function usePwa() {
 
   const dismissOfflineReady = useCallback(() => setOfflineReady(false), [setOfflineReady])
   const dismissUpdate = useCallback(() => setNeedRefresh(false), [setNeedRefresh])
+  const reloadPage = useCallback(() => window.location.reload(), [])
 
   return {
     installMode,
@@ -124,8 +127,10 @@ export function usePwa() {
     registrationFailed,
     offlineReady,
     needRefresh,
+    reloadNeeded,
     promptInstall,
     updateServiceWorker,
+    reloadPage,
     dismissOfflineReady,
     dismissUpdate,
   }

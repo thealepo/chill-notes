@@ -41,6 +41,7 @@ interface UseWorkspaceStorageResult {
   status: WorkspaceStorageStatus
   usage: StorageUsage | null
   syncedAt: number | null
+  flush: () => Promise<WorkspaceStorageStatus>
 }
 
 interface PendingWorkspaceSave {
@@ -68,6 +69,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const hydratedRef = useRef(false)
   const touchedBeforeHydrationRef = useRef(false)
   const workspaceRef = useRef(workspace)
+  const statusRef = useRef(status)
   const revisionRef = useRef(0)
   const pendingSaveRef = useRef<PendingWorkspaceSave | null>(null)
   const saveRunningRef = useRef(false)
@@ -112,6 +114,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
       }
 
       if (mountedRef.current && revision === revisionRef.current) {
+        statusRef.current = nextStatus
         setStatus(nextStatus)
         void refreshUsage()
       }
@@ -123,9 +126,19 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const persist = useCallback((snapshot: StoredWorkspace) => {
     const revision = ++revisionRef.current
     pendingSaveRef.current = { snapshot, revision }
-    setStatus((current) => ({ ...current, phase: 'saving' }))
+    const savingStatus = { ...statusRef.current, phase: 'saving' } satisfies WorkspaceStorageStatus
+    statusRef.current = savingStatus
+    setStatus(savingStatus)
     void runSaveQueue()
   }, [runSaveQueue])
+
+  const flush = useCallback(async () => {
+    persist(workspaceRef.current)
+    while (saveRunningRef.current || pendingSaveRef.current) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
+    }
+    return statusRef.current
+  }, [persist])
 
   useEffect(() => {
     mountedRef.current = true
@@ -223,5 +236,5 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     }
   }, [])
 
-  return { workspace, setWorkspace, status, usage, syncedAt }
+  return { workspace, setWorkspace, status, usage, syncedAt, flush }
 }

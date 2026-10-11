@@ -32,6 +32,8 @@ function blankNote(): Note {
   }
 }
 
+const UPDATE_SAVE_TIMEOUT = 10_000
+
 export default function App() {
   const {
     workspace: workspaceState,
@@ -39,6 +41,7 @@ export default function App() {
     status: storageStatus,
     usage: storageUsage,
     syncedAt,
+    flush: flushWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
   const notes = workspaceState.notes
   const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
@@ -63,8 +66,9 @@ export default function App() {
   const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const pwa = usePwa()
-  const { dismissOfflineReady, offlineReady } = pwa
+  const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
   const previousOnlineRef = useRef(true)
+  const pwaReloadRunningRef = useRef(false)
 
   const setNotes = useCallback((update: SetStateAction<Note[]>) => {
     setWorkspaceState((current) => ({
@@ -325,15 +329,56 @@ export default function App() {
     }
   }
 
+  const saveBeforePwaReload = useCallback(async () => {
+    const savedStatus = await Promise.race([
+      flushWorkspace(),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), UPDATE_SAVE_TIMEOUT)),
+    ])
+    if (!savedStatus) {
+      setNotice('Update paused because saving is taking longer than expected. Try again in a moment.')
+      return false
+    }
+    if (savedStatus.phase === 'error') {
+      setNotice('Update paused because your latest changes are not saved. Download a backup first.')
+      return false
+    }
+    return true
+  }, [flushWorkspace])
+
   async function updatePwa() {
     setUpdatingPwa(true)
     try {
+      if (storageStatus.phase === 'loading' || storageStatus.phase === 'saving') {
+        setNotice('Finishing saving before the update…')
+      }
+      if (!await saveBeforePwaReload()) {
+        setUpdatingPwa(false)
+        return
+      }
+      if (pwaReloadNeeded) {
+        reloadPwaPage()
+        return
+      }
       await pwa.updateServiceWorker(true)
     } catch {
       setUpdatingPwa(false)
       setNotice('Could not update right now. Your current version is still available.')
     }
   }
+
+  useEffect(() => {
+    if (!pwaReloadNeeded || pwaReloadRunningRef.current) return
+    pwaReloadRunningRef.current = true
+    setUpdatingPwa(true)
+    void saveBeforePwaReload().then((canReload) => {
+      if (canReload) {
+        reloadPwaPage()
+        return
+      }
+      pwaReloadRunningRef.current = false
+      setUpdatingPwa(false)
+    })
+  }, [pwaReloadNeeded, reloadPwaPage, saveBeforePwaReload])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
