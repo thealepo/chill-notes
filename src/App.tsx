@@ -2,9 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Menu } from 'lucide-react'
 import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
+import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
+import { usePwa } from './hooks/usePwa'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
 import {
   markdownFilename,
@@ -56,7 +58,10 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
+  const pwa = usePwa()
+  const previousOnlineRef = useRef(pwa.online)
 
   const setNotes = useCallback((update: SetStateAction<Note[]>) => {
     setWorkspaceState((current) => ({
@@ -84,6 +89,23 @@ export default function App() {
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
   }, [syncedAt])
+
+  useEffect(() => {
+    if (!pwa.offlineReady) return
+    setNotice('Chill Notes is ready to use offline.')
+    pwa.dismissOfflineReady()
+  }, [pwa.dismissOfflineReady, pwa.offlineReady])
+
+  useEffect(() => {
+    if (!pwa.registrationFailed) return
+    setNotice('Offline setup is unavailable right now. Your notes still save on this device.')
+  }, [pwa.registrationFailed])
+
+  useEffect(() => {
+    if (previousOnlineRef.current === pwa.online) return
+    previousOnlineRef.current = pwa.online
+    setNotice(pwa.online ? 'Back online.' : 'You’re offline — your saved notes are still available.')
+  }, [pwa.online])
 
   useEffect(() => {
     if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
@@ -272,6 +294,29 @@ export default function App() {
     }
   }
 
+  async function installPwa() {
+    setWorkspaceMenuOpen(false)
+    try {
+      const result = await pwa.promptInstall()
+      if (result === 'accepted') setNotice('Chill Notes is being installed.')
+      if (result === 'dismissed') setNotice('Installation cancelled. You can try again later.')
+      if (result === 'manual') setNotice('In Safari, tap Share, then “Add to Home Screen.”')
+      if (result === 'unavailable') setNotice('Install from your browser’s app menu when available.')
+    } catch {
+      setNotice('Could not open the install prompt. Try your browser’s app menu.')
+    }
+  }
+
+  async function updatePwa() {
+    setUpdatingPwa(true)
+    try {
+      await pwa.updateServiceWorker(true)
+    } catch {
+      setUpdatingPwa(false)
+      setNotice('Could not update right now. Your current version is still available.')
+    }
+  }
+
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null
@@ -322,6 +367,13 @@ export default function App() {
         usage={storageUsage}
         onDownloadBackup={exportNotes}
       />
+      {pwa.needRefresh && (
+        <PwaUpdateNotice
+          updating={updatingPwa}
+          onUpdate={updatePwa}
+          onDismiss={pwa.dismissUpdate}
+        />
+      )}
 
       <AppSidebar
         open={sidebarOpen}
@@ -335,6 +387,7 @@ export default function App() {
         workspaceMenuOpen={workspaceMenuOpen}
         storageStatus={storageStatus}
         storageUsage={storageUsage}
+        pwaInstallMode={pwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
         importInputRef={importInputRef}
@@ -359,6 +412,7 @@ export default function App() {
         }}
         onChooseImport={chooseImportFile}
         onExportNotes={exportNotes}
+        onInstallApp={installPwa}
         onImportNotes={importNotes}
       />
 

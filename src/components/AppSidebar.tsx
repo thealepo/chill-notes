@@ -11,10 +11,12 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Smartphone,
   Upload,
   X,
 } from 'lucide-react'
 import type { ChangeEventHandler, RefObject } from 'react'
+import type { PwaInstallMode } from '../hooks/usePwa'
 import type { ThemePreference } from '../hooks/useTheme'
 import type { WorkspaceStorageStatus } from '../hooks/useWorkspaceStorage'
 import { modKeyLabel } from '../lib/platform'
@@ -37,6 +39,7 @@ interface AppSidebarProps {
   workspaceMenuOpen: boolean
   storageStatus: WorkspaceStorageStatus
   storageUsage: StorageUsage | null
+  pwaInstallMode: PwaInstallMode
   themePreference: ThemePreference
   searchInputRef: RefObject<HTMLInputElement>
   importInputRef: RefObject<HTMLInputElement>
@@ -53,6 +56,7 @@ interface AppSidebarProps {
   onToggleWorkspaceMenu: () => void
   onChooseImport: () => void
   onExportNotes: () => void
+  onInstallApp: () => void
   onImportNotes: ChangeEventHandler<HTMLInputElement>
 }
 
@@ -86,6 +90,7 @@ export function AppSidebar({
   workspaceMenuOpen,
   storageStatus,
   storageUsage,
+  pwaInstallMode,
   themePreference,
   searchInputRef,
   importInputRef,
@@ -102,6 +107,7 @@ export function AppSidebar({
   onToggleWorkspaceMenu,
   onChooseImport,
   onExportNotes,
+  onInstallApp,
   onImportNotes,
 }: AppSidebarProps) {
   const saveLabel = storageStatus.phase === 'loading'
@@ -240,6 +246,12 @@ export function AppSidebar({
                     <small>{formatStorageSize(storageUsage.usage)} of {formatStorageSize(storageUsage.quota)} used</small>
                   </span>
                 </div>
+              )}
+              {pwaInstallMode !== 'none' && (
+                <button onClick={onInstallApp} role="menuitem">
+                  <Smartphone size={15} />
+                  {pwaInstallMode === 'ios' ? 'Add to Home Screen' : 'Install Chill Notes'}
+                </button>
               )}
               <button onClick={onChooseImport} role="menuitem"><Upload size={15} />Import notes</button>
               <button onClick={onExportNotes} role="menuitem"><Download size={15} />Download backup</button>

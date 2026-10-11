@@ -2010,6 +2010,81 @@ textarea:focus-visible {
   background: var(--surface);
 }
 
+.pwa-update-notice {
+  position: fixed;
+  z-index: 76;
+  top: 68px;
+  right: 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: min(520px, calc(100vw - 290px));
+  padding: 11px 10px 11px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 11px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-medium);
+}
+
+.app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+  top: 146px;
+}
+
+.pwa-update-icon {
+  display: grid;
+  place-items: center;
+  color: var(--accent-text);
+}
+
+.pwa-update-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.pwa-update-copy strong {
+  font-size: 12px;
+}
+
+.pwa-update-copy > span {
+  color: var(--text-secondary);
+}
+
+.pwa-update-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.pwa-update-dismiss {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+
+.pwa-update-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.is-spinning {
+  animation: pwa-spin 900ms linear infinite;
+}
+
+@keyframes pwa-spin {
+  to { transform: rotate(360deg); }
+}
+
 .empty-workspace {
   display: grid;
   place-items: center;
@@ -2041,8 +2116,40 @@ textarea:focus-visible {
     justify-content: center;
   }
 
+  .pwa-update-notice {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: auto;
+  }
+
+  .app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+    top: auto;
+    bottom: 150px;
+  }
+
+  .pwa-update-action {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .pwa-update-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
   .app-shell:has(.storage-recovery-notice) .toast {
     bottom: 150px;
+  }
+
+  .app-shell:has(.pwa-update-notice) .toast {
+    bottom: 142px;
+  }
+
+  .app-shell:has(.storage-recovery-notice):has(.pwa-update-notice) .toast {
+    bottom: 280px;
   }
 }
 
