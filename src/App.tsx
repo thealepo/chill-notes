@@ -2,9 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Menu } from 'lucide-react'
 import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
+import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
 import { useTheme } from './hooks/useTheme'
+import { usePwa } from './hooks/usePwa'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
 import {
   markdownFilename,
@@ -30,6 +32,8 @@ function blankNote(): Note {
   }
 }
 
+const UPDATE_SAVE_TIMEOUT = 10_000
+
 export default function App() {
   const {
     workspace: workspaceState,
@@ -37,6 +41,7 @@ export default function App() {
     status: storageStatus,
     usage: storageUsage,
     syncedAt,
+    flush: flushWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
   const notes = workspaceState.notes
   const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
@@ -53,10 +58,18 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const mobileMenuRef = useRef<HTMLButtonElement>(null)
+  const sidebarWasOpenRef = useRef(false)
+  const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
+  const pwa = usePwa()
+  const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
+  const previousOnlineRef = useRef(true)
+  const pwaReloadRunningRef = useRef(false)
 
   const setNotes = useCallback((update: SetStateAction<Note[]>) => {
     setWorkspaceState((current) => ({
@@ -86,8 +99,53 @@ export default function App() {
   }, [syncedAt])
 
   useEffect(() => {
+    if (!offlineReady) return
+    setNotice('Chill Notes is ready to use offline.')
+    dismissOfflineReady()
+  }, [dismissOfflineReady, offlineReady])
+
+  useEffect(() => {
+    if (!pwa.registrationFailed) return
+    setNotice('Offline setup is unavailable right now. Your notes still save on this device.')
+  }, [pwa.registrationFailed])
+
+  useEffect(() => {
+    if (previousOnlineRef.current === pwa.online) return
+    previousOnlineRef.current = pwa.online
+    setNotice(pwa.online ? 'Back online.' : 'You’re offline — your saved notes are still available.')
+  }, [pwa.online])
+
+  useEffect(() => {
     if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
   }, [activeId, notes])
+
+  useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 700px)').matches
+    if (!isMobile) {
+      sidebarWasOpenRef.current = sidebarOpen
+      sidebarFocusIntentRef.current = null
+      return
+    }
+
+    let focusFrame: number | undefined
+    const focusIntent = sidebarFocusIntentRef.current
+    if (sidebarOpen) {
+      focusFrame = requestAnimationFrame(() => {
+        if (focusIntent === 'search') searchInputRef.current?.focus()
+        else document.querySelector<HTMLButtonElement>('.sidebar-close')?.focus()
+      })
+    } else if (sidebarWasOpenRef.current) {
+      focusFrame = requestAnimationFrame(() => {
+        if (focusIntent === 'title') titleInputRef.current?.focus()
+        else mobileMenuRef.current?.focus()
+      })
+    }
+    sidebarFocusIntentRef.current = null
+    sidebarWasOpenRef.current = sidebarOpen
+    return () => {
+      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+    }
+  }, [sidebarOpen])
 
   useEffect(() => {
     if (!notice) return
@@ -125,16 +183,21 @@ export default function App() {
 
   function createNote() {
     const note = blankNote()
+    const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
+    if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
     setNotes((current) => [note, ...current])
     setActiveId(note.id)
     setView('notes')
     setMode('type')
     setSidebarOpen(false)
     setNoteMenuOpen(false)
-    requestAnimationFrame(() => titleInputRef.current?.focus())
+    if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
   }
 
   function selectNote(id: string) {
+    if (sidebarOpen && window.matchMedia('(max-width: 700px)').matches) {
+      sidebarFocusIntentRef.current = 'title'
+    }
     setActiveId(id)
     setSidebarOpen(false)
     setNoteMenuOpen(false)
@@ -272,6 +335,70 @@ export default function App() {
     }
   }
 
+  async function installPwa() {
+    setWorkspaceMenuOpen(false)
+    try {
+      const result = await pwa.promptInstall()
+      if (result === 'accepted') setNotice('Chill Notes is being installed.')
+      if (result === 'dismissed') setNotice('Installation cancelled. You can try again later.')
+      if (result === 'manual') setNotice('In Safari, tap Share, then “Add to Home Screen.”')
+      if (result === 'unavailable') setNotice('Install from your browser’s app menu when available.')
+    } catch {
+      setNotice('Could not open the install prompt. Try your browser’s app menu.')
+    }
+  }
+
+  const saveBeforePwaReload = useCallback(async () => {
+    const savedStatus = await Promise.race([
+      flushWorkspace(),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), UPDATE_SAVE_TIMEOUT)),
+    ])
+    if (!savedStatus) {
+      setNotice('Update paused because saving is taking longer than expected. Try again in a moment.')
+      return false
+    }
+    if (savedStatus.phase === 'error') {
+      setNotice('Update paused because your latest changes are not saved. Download a backup first.')
+      return false
+    }
+    return true
+  }, [flushWorkspace])
+
+  async function updatePwa() {
+    setUpdatingPwa(true)
+    try {
+      if (storageStatus.phase === 'loading' || storageStatus.phase === 'saving') {
+        setNotice('Finishing saving before the update…')
+      }
+      if (!await saveBeforePwaReload()) {
+        setUpdatingPwa(false)
+        return
+      }
+      if (pwaReloadNeeded) {
+        reloadPwaPage()
+        return
+      }
+      await pwa.updateServiceWorker(true)
+    } catch {
+      setUpdatingPwa(false)
+      setNotice('Could not update right now. Your current version is still available.')
+    }
+  }
+
+  useEffect(() => {
+    if (!pwaReloadNeeded || pwaReloadRunningRef.current) return
+    pwaReloadRunningRef.current = true
+    setUpdatingPwa(true)
+    void saveBeforePwaReload().then((canReload) => {
+      if (canReload) {
+        reloadPwaPage()
+        return
+      }
+      pwaReloadRunningRef.current = false
+      setUpdatingPwa(false)
+    })
+  }, [pwaReloadNeeded, reloadPwaPage, saveBeforePwaReload])
+
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null
@@ -280,13 +407,22 @@ export default function App() {
         event.preventDefault()
         // The search field lives in the sidebar, which is hidden in focus mode and on mobile.
         setFocusMode(false)
-        if (window.matchMedia('(max-width: 700px)').matches) setSidebarOpen(true)
-        requestAnimationFrame(() => searchInputRef.current?.focus())
+        if (window.matchMedia('(max-width: 700px)').matches) {
+          if (sidebarOpen) searchInputRef.current?.focus()
+          else {
+            sidebarFocusIntentRef.current = 'search'
+            setSidebarOpen(true)
+          }
+        } else {
+          requestAnimationFrame(() => searchInputRef.current?.focus())
+        }
         return
       }
       if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && event.key.toLowerCase() === 'n') {
         event.preventDefault()
         const note = blankNote()
+        const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
+        if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
         setNotes((current) => [note, ...current])
         setActiveId(note.id)
         setView('notes')
@@ -295,7 +431,7 @@ export default function App() {
         setNoteMenuOpen(false)
         setWorkspaceMenuOpen(false)
         setSettingsOpen(false)
-        requestAnimationFrame(() => titleInputRef.current?.focus())
+        if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
       }
       if (event.key === 'Escape') {
         setNoteMenuOpen(false)
@@ -307,13 +443,13 @@ export default function App() {
 
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [setNotes])
+  }, [setNotes, sidebarOpen])
 
   if (!activeNote) return null
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''}`}>
-      <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open notes">
+      <button ref={mobileMenuRef} className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open notes">
         <Menu size={20} />
       </button>
       {notice && <div className="toast" role="status">{notice}</div>}
@@ -322,6 +458,13 @@ export default function App() {
         usage={storageUsage}
         onDownloadBackup={exportNotes}
       />
+      {pwa.needRefresh && (
+        <PwaUpdateNotice
+          updating={updatingPwa}
+          onUpdate={updatePwa}
+          onDismiss={pwa.dismissUpdate}
+        />
+      )}
 
       <AppSidebar
         open={sidebarOpen}
@@ -335,6 +478,7 @@ export default function App() {
         workspaceMenuOpen={workspaceMenuOpen}
         storageStatus={storageStatus}
         storageUsage={storageUsage}
+        pwaInstallMode={pwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
         importInputRef={importInputRef}
@@ -359,6 +503,7 @@ export default function App() {
         }}
         onChooseImport={chooseImportFile}
         onExportNotes={exportNotes}
+        onInstallApp={installPwa}
         onImportNotes={importNotes}
       />
 

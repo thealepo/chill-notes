@@ -769,6 +769,7 @@ textarea:focus-visible {
 .quote-mark { position: absolute; left: 23px; top: -2px; color: var(--accent-text); font-family: Georgia, serif; font-size: 29px; }
 .check-button { position: absolute; z-index: 2; left: 49px; top: 12px; display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-on-accent); font-size: 10px; background: var(--surface-raised); cursor: pointer; }
 .check-button.checked { border-color: var(--accent); background: var(--accent); }
+.check-mark { position: relative; z-index: 1; line-height: 1; }
 .kind-checklist .block-content textarea { padding-left: 29px; }
 .block-content textarea.completed { color: var(--text-muted); text-decoration: line-through; }
 .kind-math { margin: 9px 0; }
@@ -2010,6 +2011,85 @@ textarea:focus-visible {
   background: var(--surface);
 }
 
+.pwa-update-notice {
+  position: fixed;
+  z-index: 76;
+  top: 68px;
+  right: 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: min(520px, calc(100vw - 290px));
+  padding: 11px 10px 11px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 11px;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-medium);
+}
+
+.app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+  top: 146px;
+}
+
+.pwa-update-icon {
+  display: grid;
+  place-items: center;
+  color: var(--accent-text);
+}
+
+.pwa-update-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.pwa-update-copy strong {
+  font-size: 12px;
+}
+
+.pwa-update-copy > span {
+  color: var(--text-secondary);
+}
+
+.pwa-update-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.pwa-update-dismiss {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+
+.pwa-update-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.is-spinning {
+  animation: pwa-spin 900ms linear infinite;
+}
+
+@keyframes pwa-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-spinning { animation: none; }
+}
+
 .empty-workspace {
   display: grid;
   place-items: center;
@@ -2041,8 +2121,40 @@ textarea:focus-visible {
     justify-content: center;
   }
 
+  .pwa-update-notice {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: auto;
+  }
+
+  .app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+    top: auto;
+    bottom: 150px;
+  }
+
+  .pwa-update-action {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .pwa-update-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
   .app-shell:has(.storage-recovery-notice) .toast {
     bottom: 150px;
+  }
+
+  .app-shell:has(.pwa-update-notice) .toast {
+    bottom: 142px;
+  }
+
+  .app-shell:has(.storage-recovery-notice):has(.pwa-update-notice) .toast {
+    bottom: 280px;
   }
 }
 
@@ -2296,4 +2408,313 @@ textarea.title-input {
   .drawing-toolbar { flex-wrap: wrap; overflow: visible; row-gap: 8px; }
   .toolbar-divider { display: none; }
   .history-tools { margin-left: auto; }
+}
+
+/* Mobile PWA viewport, safe-area, and touch ergonomics */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root,
+.app-shell {
+  min-height: 100%;
+  overscroll-behavior: none;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    height: 100dvh;
+  }
+}
+
+.sidebar {
+  padding-top: calc(18px + var(--safe-top));
+  padding-bottom: calc(14px + var(--safe-bottom));
+  padding-left: calc(12px + var(--safe-left));
+}
+
+.topbar {
+  flex-basis: calc(54px + var(--safe-top));
+  min-height: calc(54px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-right: calc(20px + var(--safe-right));
+}
+
+.workspace-scroll {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drawing-tools,
+.drawing-properties,
+.block-toolbar,
+.selection-toolbar {
+  overscroll-behavior-inline: contain;
+}
+
+.storage-recovery-notice,
+.pwa-update-notice {
+  top: calc(68px + var(--safe-top));
+  right: calc(20px + var(--safe-right));
+}
+
+.app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+  top: calc(146px + var(--safe-top));
+}
+
+.toast {
+  right: calc(20px + var(--safe-right));
+  bottom: calc(20px + var(--safe-bottom));
+}
+
+.page-cover button {
+  right: calc(20px + var(--safe-right));
+}
+
+.document-column,
+.mode-draw .document-column {
+  padding-right: calc(28px + var(--safe-right));
+  padding-left: calc(28px + var(--safe-left));
+}
+
+@media (pointer: coarse) {
+  .new-note-button,
+  .sidebar-link,
+  .workspace-menu button,
+  .note-menu button,
+  .block-actions-menu button,
+  .slash-menu button,
+  .drawing-tools button,
+  .history-tools button,
+  .selection-toolbar button,
+  .canvas-zoom-controls button,
+  .theme-switcher label,
+  .pwa-update-action,
+  .storage-recovery-notice button,
+  .page-cover button,
+  .page-customize-actions button,
+  .page-tail {
+    min-height: 44px;
+  }
+
+  .mobile-menu,
+  .topbar .icon-button,
+  .sidebar-close,
+  .profile-menu-button,
+  .panel-heading .icon-button,
+  .sidebar-section-actions button,
+  .drawing-tools button,
+  .history-tools button,
+  .canvas-zoom-controls button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .pwa-update-dismiss {
+    width: 44px;
+    height: 44px;
+  }
+
+  .topbar-mode-switcher button {
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .paper-select select,
+  .stroke-size input {
+    min-height: 44px;
+  }
+
+  .color-picker button {
+    position: relative;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .color-picker button::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border: 3px solid transparent;
+    border-radius: 50%;
+    background: var(--swatch);
+    background-clip: padding-box;
+  }
+
+  .color-picker button.active {
+    box-shadow: none;
+  }
+
+  .color-picker button.active::before {
+    box-shadow: 0 0 0 1px var(--swatch), 0 0 0 3px var(--surface-raised);
+  }
+
+  .search-field input,
+  .notion-editor .block-content textarea,
+  .notion-editor .kind-code textarea,
+  .notion-editor .kind-math textarea,
+  .paper-select select,
+  .canvas-text-editor {
+    font-size: 16px;
+  }
+
+  .notion-editor .kind-checklist {
+    min-height: 46px;
+  }
+
+  .notion-editor .kind-checklist textarea {
+    min-height: 44px;
+    padding-left: 52px;
+  }
+
+  .notion-editor .check-button {
+    top: 1px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+  }
+
+  .notion-editor .check-button::before {
+    content: '';
+    position: absolute;
+    inset: 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-raised);
+  }
+
+  .notion-editor .check-button.checked {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .notion-editor .check-button.checked::before {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .drawing-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drawing-properties {
+    width: 100%;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .drawing-properties > * {
+    flex: 0 0 auto;
+  }
+
+  .drawing-toolbar .history-tools {
+    width: 100%;
+    padding-top: 7px;
+    margin: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .drawing-toolbar .history-tools .export-button {
+    margin-left: auto;
+  }
+}
+
+@media (hover: none) {
+  .page-customize-actions {
+    opacity: 0.82;
+  }
+}
+
+@media (max-width: 700px) {
+  .sidebar {
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
+  }
+
+  .sidebar.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+
+  .app-shell:has(.sidebar.is-open) .workspace-scroll {
+    overflow: hidden;
+  }
+
+  .mobile-menu {
+    top: calc(10px + var(--safe-top));
+    left: calc(12px + var(--safe-left));
+  }
+
+  .topbar {
+    padding-right: calc(10px + var(--safe-right));
+    padding-left: calc(64px + var(--safe-left));
+  }
+
+  .note-menu {
+    top: calc(58px + var(--safe-top));
+    right: calc(10px + var(--safe-right));
+  }
+
+  .document-column,
+  .mode-draw .document-column {
+    padding-right: calc(20px + var(--safe-right));
+    padding-bottom: calc(90px + var(--safe-bottom));
+    padding-left: calc(20px + var(--safe-left));
+  }
+
+  .notion-editor .slash-menu,
+  .block-actions-menu {
+    right: calc(10px + var(--safe-right));
+    bottom: calc(12px + var(--safe-bottom));
+    left: calc(10px + var(--safe-left));
+  }
+
+  .storage-recovery-notice,
+  .pwa-update-notice {
+    top: auto;
+    right: calc(12px + var(--safe-right));
+    bottom: calc(12px + var(--safe-bottom));
+    left: calc(12px + var(--safe-left));
+  }
+
+  .app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+    top: auto;
+    bottom: calc(150px + var(--safe-bottom));
+  }
+
+  .toast {
+    right: calc(16px + var(--safe-right));
+    bottom: calc(16px + var(--safe-bottom));
+    left: calc(16px + var(--safe-left));
+  }
+
+  .app-shell:has(.storage-recovery-notice) .toast {
+    bottom: calc(150px + var(--safe-bottom));
+  }
+
+  .app-shell:has(.pwa-update-notice) .toast {
+    bottom: calc(142px + var(--safe-bottom));
+  }
+
+  .app-shell:has(.storage-recovery-notice):has(.pwa-update-notice) .toast {
+    bottom: calc(280px + var(--safe-bottom));
+  }
 }

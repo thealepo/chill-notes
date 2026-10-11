@@ -25,6 +25,7 @@ npm run lint
 npm run build
 npm run check
 npm run preview
+npm run generate:icons
 ```
 
 `npm run check` is the standard local verification and runs lint, the Node test suite, the production build, and the Playwright browser suite. The build uses TypeScript project references before Vite bundles the app. `.github/workflows/quality.yml` checks out the repository, sets up Node 22, runs `npm ci`, installs Chromium, and then runs `npm run check`.
@@ -32,6 +33,8 @@ npm run preview
 ## Repository map
 
 - `index.html` — Vite shell and an inline pre-paint theme bootstrap that prevents a light/dark flash. Keep its storage-key and theme-color behavior aligned with `useTheme`.
+- `vite.config.ts` — Vite and Workbox PWA configuration, including the web app manifest and offline precache. Keep the manifest colors aligned with the app identity and do not auto-activate updates.
+- `public/icons/` and `scripts/generate-pwa-icons.mjs` — maintained launcher SVG sources, generated conventional/maskable PNGs, and the reproducible Playwright rasterization script.
 - `src/main.tsx` — React entry point; imports global CSS and KaTeX CSS.
 - `src/App.tsx` — top-level workspace orchestration. Owns selection, filtering, sorting, archive/favorite behavior, menus, focus/sidebar state, note-level import/export, and the type/draw mode switch.
 - `src/components/AppSidebar.tsx` and `src/components/NoteWorkspace.tsx` — focused app-shell presentation for navigation/settings and the active note surface.
@@ -44,6 +47,7 @@ npm run preview
 - `src/lib/drawingKeyboard.ts` — pure keyboard-canvas helpers for cycling editable objects, moving selected objects, creating centered elements, and accessible element labels.
 - `src/components/ThemeSwitcher.tsx` — accessible system/light/dark radio control.
 - `src/hooks/useTheme.ts` — theme preference persistence, system-theme observation, cross-tab storage updates, and DOM theme application.
+- `src/hooks/usePwa.ts` and `src/components/PwaUpdateNotice.tsx` — service-worker registration, install/standalone/connection state, iOS install guidance, and user-controlled update activation.
 - `src/hooks/useWorkspaceStorage.ts` — IndexedDB hydration and serialized saves, legacy localStorage fallback/migration, cross-tab synchronization, and storage-status reporting.
 - `src/lib/noteSerialization.ts` — storage migration, defensive JSON import parsing, Markdown rendering, and safe Markdown filenames.
 - `src/lib/workspaceStorage.ts` and `src/lib/storageUsage.ts` — IndexedDB primitives, legacy storage access, browser quota estimation, and pure capacity-warning helpers.
@@ -58,6 +62,7 @@ npm run preview
 - `tests/drawingKeyboard.test.ts` — regression coverage for keyboard selection order, immutable object movement, and centered object creation.
 - `tests/storage.test.ts` — Node regression coverage for stored-data sanitization, legacy migration, cross-tab conflict merging, deletion tombstones, and storage round-tripping.
 - `e2e/chill-notes.spec.ts` — Playwright coverage for editor and drawing interactions, persistence, legacy migration, cross-tab sync, storage warnings/failures, downloads, and the minimum mobile viewport.
+- `e2e/pwa.spec.ts` — production-service-worker, manifest/icon, offline reload, install/update, safe-area, and touch-device regression coverage.
 - `docs/notion-editor-research.md` — product behavior references and explicit MVP boundaries.
 - `docs/screenshots/` — desktop light and mobile dark reference screenshots for portability and favorites UI.
 - `README.md` — concise user-facing feature and setup documentation.
@@ -69,6 +74,8 @@ Generated directories such as `node_modules`, `dist`, and `.vite`, plus `*.tsbui
 `Note` and `NoteBlock` in `src/types.ts` are the source of truth. A note contains its block array plus optional presentation/archive state and an optional canvas data URL. Supported block kinds are text, three heading levels, bullet, numbered, checklist, quote, divider, code, and math.
 
 Notes and deletion tombstones are held in React state and written as a versioned workspace envelope to the `chill-notes` IndexedDB database after changes. Theme preference remains separate under the `chill-notes-theme` localStorage key; system mode is represented by removing that key. There is no server, router, remote database, authentication, or network data layer.
+
+The service worker precaches only versioned application assets. It does not cache note content, export blobs, or a remote API. Updates remain waiting until the user accepts the in-app update prompt, so do not switch the PWA to automatic activation/reload.
 
 Important persistence behaviors:
 
@@ -116,6 +123,7 @@ Strokes store pressure plus points normalized to their object bounds, so selecti
 - Reuse CSS custom properties from the light and dark token sets rather than introducing hard-coded colors. A few earlier Notion-style rules still contain hard-coded neutrals that are overridden later; check both themes before expanding that pattern.
 - The responsive breakpoints are primarily 920px and 700px. Verify desktop and narrow/mobile layouts after structural UI changes.
 - Preserve the minimum 320px viewport support and the full-height, internally scrolling app shell.
+- Keep fixed mobile controls and overlays inside the `--safe-*` inset tokens, use dynamic viewport units with a fallback, and retain coarse-pointer target/input sizing. Do not disable page zoom to work around iOS form zoom.
 - Keep icon-only controls labeled with `aria-label`. Preserve menu/dialog/tab/listbox roles, `aria-expanded`, `aria-selected`, `aria-pressed`, status announcements, focus-visible styling, and reduced-motion behavior.
 - Use Lucide icons already in the dependency set rather than adding another icon source.
 - Browser globals are expected, but storage can be unavailable. Theme storage access already degrades safely; maintain similar resilience for new preference storage.
@@ -141,3 +149,4 @@ For every code change:
 5. For Markdown changes, inspect headings, consecutive numbered/list blocks, checklists, multiline quotes, code containing backticks, equations, empty titles, and filename sanitization.
 6. For canvas changes, verify resize preservation, pen/highlighter/eraser behavior, undo/redo, clear, autosave, and PNG export.
 7. For theme or styling changes, verify light, dark, and system modes before and after reload, including mobile layout and keyboard focus indicators.
+8. For PWA/mobile changes, verify manifest/icon installability, a controlled offline reload, explicit update activation, portrait and landscape overflow, emulated safe-area insets, drawer focus, and at least one true touch-emulated canvas gesture.

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="rose" x1="36" y1="12" x2="486" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c87489" />
+      <stop offset="1" stop-color="#a94f69" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(146 112) rotate(44) scale(420)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5c9d5" stop-opacity=".6" />
+      <stop offset="1" stop-color="#f5c9d5" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#rose)" />
+  <rect width="512" height="512" fill="url(#glow)" />
+  <circle cx="64" cy="448" r="170" fill="#81384e" opacity=".12" />
+  <circle cx="482" cy="18" r="136" fill="#fffafc" opacity=".08" />
+  <g transform="translate(124 124) scale(11)" fill="none" stroke="#fffafc" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z" />
+    <path d="M16 8 2 22" />
+    <path d="M17.5 15H9" />
+  </g>
+</svg>

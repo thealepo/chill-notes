@@ -428,6 +428,12 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
+    // This editor intentionally supports one gesture at a time. Ignore an extra
+    // finger instead of allowing it to replace and corrupt the active stroke.
+    if ((event.pointerType === 'touch' && !event.isPrimary) || gestureRef.current) {
+      event.preventDefault()
+      return
+    }
     event.preventDefault()
     event.currentTarget.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -582,6 +588,13 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     const gesture = gestureRef.current
     if (!gesture || gesture.pointerId !== event.pointerId) return
     gestureRef.current = null
+
+    if (event.type === 'pointercancel') {
+      if (gesture.type === 'draw' || gesture.type === 'shape') setLiveDraft(null)
+      if (gesture.type === 'move' || gesture.type === 'resize' || gesture.type === 'erase') setLiveScene(gesture.before)
+      if (gesture.type === 'pan') setLiveViewport(gesture.viewport)
+      return
+    }
 
     if (gesture.type === 'draw') {
       const current = draftRef.current
