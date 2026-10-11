@@ -769,6 +769,7 @@ textarea:focus-visible {
 .quote-mark { position: absolute; left: 23px; top: -2px; color: var(--accent-text); font-family: Georgia, serif; font-size: 29px; }
 .check-button { position: absolute; z-index: 2; left: 49px; top: 12px; display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-on-accent); font-size: 10px; background: var(--surface-raised); cursor: pointer; }
 .check-button.checked { border-color: var(--accent); background: var(--accent); }
+.check-mark { position: relative; z-index: 1; line-height: 1; }
 .kind-checklist .block-content textarea { padding-left: 29px; }
 .block-content textarea.completed { color: var(--text-muted); text-decoration: line-through; }
 .kind-math { margin: 9px 0; }

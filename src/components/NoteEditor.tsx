@@ -413,7 +413,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
 
               {block.kind === 'checklist' && (
                 <button className={`check-button ${block.checked ? 'checked' : ''}`} onClick={() => updateBlock(block.id, { checked: !block.checked })} aria-label={block.checked ? 'Mark incomplete' : 'Mark complete'} aria-pressed={Boolean(block.checked)}>
-                  {block.checked && '✓'}
+                  <span className="check-mark" aria-hidden="true">{block.checked && '✓'}</span>
                 </button>
               )}
               {block.kind === 'bullet' && <span className="list-marker" aria-hidden="true">•</span>}

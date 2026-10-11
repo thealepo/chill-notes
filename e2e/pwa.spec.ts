@@ -444,6 +444,11 @@ test.describe('coarse touch mobile PWA', () => {
     expect((checkBox?.x ?? 0) + (checkBox?.width ?? 0)).toBeLessThanOrEqual(
       (checklistBox?.x ?? 0) + checklistPadding,
     )
+    await checkButton.tap()
+    const checkedButton = page.getByRole('button', { name: 'Mark incomplete' })
+    await expect(checkedButton).toHaveAttribute('aria-pressed', 'true')
+    await expect(checkedButton.locator('.check-mark')).toHaveText('✓')
+    await expect(checkedButton.locator('.check-mark')).toHaveCSS('z-index', '1')
 
     await menuButton.tap()
     await page.getByRole('button', { name: 'Archive', exact: true }).tap()
