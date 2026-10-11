@@ -474,7 +474,7 @@ test.describe('coarse touch mobile PWA', () => {
     }))).toEqual({ fitsWidth: true, shellHeight: 412, viewportHeight: 412, documentPaddingLeft: '62px' })
 
     await page.getByRole('tab', { name: 'Draw' }).tap()
-    const toolbarLayout = await page.locator('.drawing-toolbar').evaluate((toolbar) => {
+    const readToolbarLayout = () => page.locator('.drawing-toolbar').evaluate((toolbar) => {
       const properties = toolbar.querySelector<HTMLElement>('.drawing-properties')
       const history = toolbar.querySelector<HTMLElement>('.history-tools')
       const propertiesRect = properties?.getBoundingClientRect()
@@ -487,6 +487,7 @@ test.describe('coarse touch mobile PWA', () => {
         groupsSeparated: Boolean(propertiesRect && historyRect && historyRect.top >= propertiesRect.bottom),
       }
     })
+    const toolbarLayout = await readToolbarLayout()
     expect(toolbarLayout.outerFits).toBe(true)
     expect(toolbarLayout.propertiesOverflow).toBe('auto')
     expect(toolbarLayout.propertiesScrollWidth).toBeGreaterThan(toolbarLayout.propertiesClientWidth)
@@ -498,6 +499,13 @@ test.describe('coarse touch mobile PWA', () => {
       })
     ))
     expect(swatchSizes.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true)
+
+    await page.setViewportSize({ width: 1024, height: 768 })
+    const tabletToolbarLayout = await readToolbarLayout()
+    expect(tabletToolbarLayout.outerFits).toBe(true)
+    expect(tabletToolbarLayout.propertiesOverflow).toBe('auto')
+    expect(tabletToolbarLayout.groupsSeparated).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
 
   test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {

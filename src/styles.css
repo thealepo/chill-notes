@@ -2606,9 +2606,7 @@ body,
     border-color: var(--accent);
     background: var(--accent);
   }
-}
 
-@media (pointer: coarse) and (max-width: 920px) {
   .drawing-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }
