@@ -386,6 +386,7 @@ test.describe('coarse touch mobile PWA', () => {
     await expect(toast).toContainText('Archive is empty.')
     const toastBox = await toast.boundingBox()
     expect((toastBox?.y ?? 0) + (toastBox?.height ?? 0)).toBeLessThanOrEqual(viewportHeight - safeArea.bottom)
+    expect((await page.getByRole('button', { name: 'Add icon' }).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
     await page.setViewportSize({ width: 320, height: 700 })
@@ -404,7 +405,9 @@ test.describe('coarse touch mobile PWA', () => {
   test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {
     await openCleanApp(page)
     await page.getByRole('tab', { name: 'Draw' }).tap()
-    await page.getByRole('button', { name: 'Pen (P)' }).tap()
+    const penTool = page.getByRole('button', { name: 'Pen (P)' })
+    expect((await penTool.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
+    await penTool.tap()
 
     const canvas = page.getByRole('application', { name: /Editable drawing canvas/ })
     const bounds = await canvas.boundingBox()
