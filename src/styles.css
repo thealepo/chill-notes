@@ -2536,6 +2536,7 @@ body,
 
   .color-picker button {
     position: relative;
+    flex: 0 0 44px;
     width: 44px;
     height: 44px;
     border: 0;
@@ -2604,6 +2605,34 @@ body,
   .notion-editor .check-button.checked::before {
     border-color: var(--accent);
     background: var(--accent);
+  }
+}
+
+@media (pointer: coarse) and (max-width: 920px) {
+  .drawing-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drawing-properties {
+    width: 100%;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .drawing-properties > * {
+    flex: 0 0 auto;
+  }
+
+  .drawing-toolbar .history-tools {
+    width: 100%;
+    padding-top: 7px;
+    margin: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .drawing-toolbar .history-tools .export-button {
+    margin-left: auto;
   }
 }
 

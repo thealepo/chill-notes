@@ -472,6 +472,32 @@ test.describe('coarse touch mobile PWA', () => {
       viewportHeight: window.innerHeight,
       documentPaddingLeft: getComputedStyle(document.querySelector('.document-column') as HTMLElement).paddingLeft,
     }))).toEqual({ fitsWidth: true, shellHeight: 412, viewportHeight: 412, documentPaddingLeft: '62px' })
+
+    await page.getByRole('tab', { name: 'Draw' }).tap()
+    const toolbarLayout = await page.locator('.drawing-toolbar').evaluate((toolbar) => {
+      const properties = toolbar.querySelector<HTMLElement>('.drawing-properties')
+      const history = toolbar.querySelector<HTMLElement>('.history-tools')
+      const propertiesRect = properties?.getBoundingClientRect()
+      const historyRect = history?.getBoundingClientRect()
+      return {
+        outerFits: toolbar.scrollWidth <= toolbar.clientWidth,
+        propertiesOverflow: properties ? getComputedStyle(properties).overflowX : '',
+        propertiesScrollWidth: properties?.scrollWidth ?? 0,
+        propertiesClientWidth: properties?.clientWidth ?? 0,
+        groupsSeparated: Boolean(propertiesRect && historyRect && historyRect.top >= propertiesRect.bottom),
+      }
+    })
+    expect(toolbarLayout.outerFits).toBe(true)
+    expect(toolbarLayout.propertiesOverflow).toBe('auto')
+    expect(toolbarLayout.propertiesScrollWidth).toBeGreaterThan(toolbarLayout.propertiesClientWidth)
+    expect(toolbarLayout.groupsSeparated).toBe(true)
+    const swatchSizes = await page.locator('.color-picker button').evaluateAll((buttons) => (
+      buttons.map((button) => {
+        const box = button.getBoundingClientRect()
+        return { width: box.width, height: box.height }
+      })
+    ))
+    expect(swatchSizes.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true)
   })
 
   test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {
