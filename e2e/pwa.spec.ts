@@ -372,6 +372,18 @@ test.describe('coarse touch mobile PWA', () => {
     const toastBox = await toast.boundingBox()
     expect((toastBox?.y ?? 0) + (toastBox?.height ?? 0)).toBeLessThanOrEqual(viewportHeight - safeArea.bottom)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    await page.setViewportSize({ width: 320, height: 700 })
+    await expect(page.getByRole('button', { name: 'Open notes' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    await page.setViewportSize({ width: 915, height: 412 })
+    await expect(page.getByRole('textbox', { name: 'Note title' })).toBeVisible()
+    expect(await page.evaluate(() => ({
+      fitsWidth: document.documentElement.scrollWidth <= window.innerWidth,
+      shellHeight: document.querySelector('.app-shell')?.getBoundingClientRect().height,
+      viewportHeight: window.innerHeight,
+    }))).toEqual({ fitsWidth: true, shellHeight: 412, viewportHeight: 412 })
   })
 
   test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {
