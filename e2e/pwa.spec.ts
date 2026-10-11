@@ -197,6 +197,21 @@ test('offers installation only after browser eligibility and clears it after ins
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.displayMode)).toBe('standalone')
 })
 
+test('gives iPhone and iPad users concise Add to Home Screen guidance', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
+    })
+    Object.defineProperty(navigator, 'platform', { configurable: true, value: 'iPhone' })
+  })
+  await openCleanApp(page)
+
+  await page.getByRole('button', { name: 'Workspace options' }).click()
+  await page.getByRole('menuitem', { name: 'Add to Home Screen' }).click()
+  await expect(page.locator('.toast')).toContainText('In Safari, tap Share, then “Add to Home Screen.”')
+})
+
 test('reloads saved notes and all critical assets from the service worker while offline', async ({ page, context }) => {
   await openCleanApp(page)
   await waitForServiceWorkerControl(page)
