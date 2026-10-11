@@ -16,10 +16,17 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 - Conflict-safe synchronization between open browser tabs
 - System-aware light and dark themes with persisted Light, Dark, and System preferences
 - IndexedDB persistence with automatic localStorage migration, capacity warnings, and no account required
+- Installable mobile/desktop PWA with an offline app shell, adaptive icons, safe-area layouts, and touch-friendly controls
 
 The theme selector is under **Settings → Appearance** in the sidebar. System mode follows OS theme changes live; explicit Light and Dark choices are saved in the browser and applied before the app paints to avoid a theme flash.
 
 Notes and drawings are saved in IndexedDB, which provides substantially more room than localStorage for drawing-heavy workspaces. Existing `chill-notes-v1` localStorage data moves automatically on first load. The workspace menu shows the browser's storage estimate when available; if capacity gets low or saving fails, Chill Notes keeps the current tab usable and presents a **Download backup** action for immediate recovery.
+
+## Install and use offline
+
+After the first successful online visit, Chill Notes caches the app shell, editor, drawing tools, fonts, and icons for offline use. In browsers that expose an install prompt, open **Workspace options → Install Chill Notes**. On iPhone or iPad, open the same menu for **Add to Home Screen** guidance, then use Safari's Share menu.
+
+Updates are never applied in the middle of editing without permission. When a fresh version is ready, choose **Update now** from the in-app notice; notes remain in IndexedDB through the update. Notes are still device-local, so download a JSON backup before clearing browser data or removing the app if you need to preserve them.
 
 ## Editing shortcuts
 
@@ -48,9 +55,11 @@ npm run dev
 
 Run `npx playwright install chromium` once to install the browser used by the interaction tests. Then run `npm run check` to execute the same lint, Node tests, production build, and Playwright browser tests as CI. Use `npm run test:e2e` to run only the production build and browser tests.
 
+Launcher PNGs are generated reproducibly from the SVG sources in `public/icons/`. After changing that artwork, run `npm run generate:icons` and commit the refreshed assets.
+
 ## Future Features
 
 - [ ] LLM Integration -- gets specific notes and draws from them to create sample quizzes, answer questions, etc.
 - [X] Fix the UI bug where when one does a text box it is seen double.
 - [ ] Tighten up the codebase and any unsafe/buggy/unstable code
-- [ ] See how I can make it a mobile app
+- [X] Ship an installable, offline-capable mobile PWA
