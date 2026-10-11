@@ -428,6 +428,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
+    // This editor intentionally supports one gesture at a time. Ignore an extra
+    // finger instead of allowing it to replace and corrupt the active stroke.
+    if (gestureRef.current) return
     event.preventDefault()
     event.currentTarget.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture(event.pointerId)

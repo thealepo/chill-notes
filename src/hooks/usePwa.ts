@@ -77,6 +77,10 @@ export function usePwa() {
     }
   }, [])
 
+  useEffect(() => {
+    document.documentElement.dataset.displayMode = installed ? 'standalone' : 'browser'
+  }, [installed])
+
   const installMode = useMemo<PwaInstallMode>(() => {
     if (installed) return 'none'
     if (installPrompt) return 'native'

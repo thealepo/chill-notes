@@ -2404,3 +2404,225 @@ textarea.title-input {
   .toolbar-divider { display: none; }
   .history-tools { margin-left: auto; }
 }
+
+/* Mobile PWA viewport, safe-area, and touch ergonomics */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root,
+.app-shell {
+  min-height: 100%;
+  overscroll-behavior: none;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    height: 100dvh;
+  }
+}
+
+.sidebar {
+  padding-top: calc(18px + var(--safe-top));
+  padding-bottom: calc(14px + var(--safe-bottom));
+  padding-left: calc(12px + var(--safe-left));
+}
+
+.topbar {
+  flex-basis: calc(54px + var(--safe-top));
+  min-height: calc(54px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-right: calc(20px + var(--safe-right));
+}
+
+.workspace-scroll {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drawing-tools,
+.drawing-properties,
+.block-toolbar,
+.selection-toolbar {
+  overscroll-behavior-inline: contain;
+}
+
+.storage-recovery-notice,
+.pwa-update-notice {
+  top: calc(68px + var(--safe-top));
+  right: calc(20px + var(--safe-right));
+}
+
+.app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+  top: calc(146px + var(--safe-top));
+}
+
+.toast {
+  right: calc(20px + var(--safe-right));
+  bottom: calc(20px + var(--safe-bottom));
+}
+
+@media (pointer: coarse) {
+  .new-note-button,
+  .sidebar-link,
+  .workspace-menu button,
+  .note-menu button,
+  .block-actions-menu button,
+  .slash-menu button,
+  .drawing-tools button,
+  .history-tools button,
+  .selection-toolbar button,
+  .canvas-zoom-controls button,
+  .theme-switcher label,
+  .pwa-update-action,
+  .storage-recovery-notice button {
+    min-height: 44px;
+  }
+
+  .mobile-menu,
+  .topbar .icon-button,
+  .sidebar-close,
+  .profile-menu-button,
+  .panel-heading .icon-button,
+  .sidebar-section-actions button,
+  .drawing-tools button,
+  .history-tools button,
+  .canvas-zoom-controls button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .topbar-mode-switcher button {
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .paper-select select,
+  .stroke-size input {
+    min-height: 44px;
+  }
+
+  .color-picker button {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .color-picker button::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border: 3px solid transparent;
+    border-radius: 50%;
+    background: var(--swatch);
+    background-clip: padding-box;
+  }
+
+  .color-picker button.active {
+    box-shadow: none;
+  }
+
+  .color-picker button.active::before {
+    box-shadow: 0 0 0 1px var(--swatch), 0 0 0 3px var(--surface-raised);
+  }
+
+  .search-field input,
+  .notion-editor .block-content textarea,
+  .notion-editor .kind-code textarea,
+  .notion-editor .kind-math textarea,
+  .paper-select select,
+  .canvas-text-editor {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .sidebar {
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
+  }
+
+  .sidebar.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+
+  .app-shell:has(.sidebar.is-open) .workspace-scroll {
+    overflow: hidden;
+  }
+
+  .mobile-menu {
+    top: calc(10px + var(--safe-top));
+    left: calc(12px + var(--safe-left));
+  }
+
+  .topbar {
+    padding-right: calc(10px + var(--safe-right));
+    padding-left: calc(64px + var(--safe-left));
+  }
+
+  .note-menu {
+    top: calc(58px + var(--safe-top));
+    right: calc(10px + var(--safe-right));
+  }
+
+  .document-column,
+  .mode-draw .document-column {
+    padding-right: calc(20px + var(--safe-right));
+    padding-bottom: calc(90px + var(--safe-bottom));
+    padding-left: calc(20px + var(--safe-left));
+  }
+
+  .notion-editor .slash-menu,
+  .block-actions-menu {
+    right: calc(10px + var(--safe-right));
+    bottom: calc(12px + var(--safe-bottom));
+    left: calc(10px + var(--safe-left));
+  }
+
+  .storage-recovery-notice,
+  .pwa-update-notice {
+    top: auto;
+    right: calc(12px + var(--safe-right));
+    bottom: calc(12px + var(--safe-bottom));
+    left: calc(12px + var(--safe-left));
+  }
+
+  .app-shell:has(.storage-recovery-notice) .pwa-update-notice {
+    top: auto;
+    bottom: calc(150px + var(--safe-bottom));
+  }
+
+  .toast {
+    right: calc(16px + var(--safe-right));
+    bottom: calc(16px + var(--safe-bottom));
+    left: calc(16px + var(--safe-left));
+  }
+
+  .app-shell:has(.storage-recovery-notice) .toast {
+    bottom: calc(150px + var(--safe-bottom));
+  }
+
+  .app-shell:has(.pwa-update-notice) .toast {
+    bottom: calc(142px + var(--safe-bottom));
+  }
+
+  .app-shell:has(.storage-recovery-notice):has(.pwa-update-notice) .toast {
+    bottom: calc(280px + var(--safe-bottom));
+  }
+}

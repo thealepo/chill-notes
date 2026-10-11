@@ -55,12 +55,15 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const mobileMenuRef = useRef<HTMLButtonElement>(null)
+  const sidebarWasOpenRef = useRef(false)
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const pwa = usePwa()
+  const { dismissOfflineReady, offlineReady } = pwa
   const previousOnlineRef = useRef(pwa.online)
 
   const setNotes = useCallback((update: SetStateAction<Note[]>) => {
@@ -91,10 +94,10 @@ export default function App() {
   }, [syncedAt])
 
   useEffect(() => {
-    if (!pwa.offlineReady) return
+    if (!offlineReady) return
     setNotice('Chill Notes is ready to use offline.')
-    pwa.dismissOfflineReady()
-  }, [pwa.dismissOfflineReady, pwa.offlineReady])
+    dismissOfflineReady()
+  }, [dismissOfflineReady, offlineReady])
 
   useEffect(() => {
     if (!pwa.registrationFailed) return
@@ -110,6 +113,21 @@ export default function App() {
   useEffect(() => {
     if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
   }, [activeId, notes])
+
+  useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 700px)').matches
+    if (!isMobile) {
+      sidebarWasOpenRef.current = sidebarOpen
+      return
+    }
+
+    if (sidebarOpen) {
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.sidebar-close')?.focus())
+    } else if (sidebarWasOpenRef.current) {
+      requestAnimationFrame(() => mobileMenuRef.current?.focus())
+    }
+    sidebarWasOpenRef.current = sidebarOpen
+  }, [sidebarOpen])
 
   useEffect(() => {
     if (!notice) return
@@ -358,7 +376,7 @@ export default function App() {
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''}`}>
-      <button className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open notes">
+      <button ref={mobileMenuRef} className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open notes">
         <Menu size={20} />
       </button>
       {notice && <div className="toast" role="status">{notice}</div>}
