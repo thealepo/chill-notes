@@ -197,6 +197,16 @@ test('publishes installable metadata and correctly sized app icons', async ({ pa
   const favicon = await request.get('/favicon.svg')
   expect(favicon.ok()).toBe(true)
   expect(favicon.headers()['content-type']).toContain('image/svg+xml')
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await page.evaluate(() => {
+    const spinner = document.createElement('span')
+    spinner.className = 'is-spinning'
+    document.body.append(spinner)
+    const animationName = getComputedStyle(spinner).animationName
+    spinner.remove()
+    return animationName
+  })).toBe('none')
 })
 
 test('offers installation only after browser eligibility and clears it after installation', async ({ page }) => {
@@ -412,6 +422,29 @@ test.describe('coarse touch mobile PWA', () => {
     await page.getByRole('button', { name: 'Close notes' }).tap()
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Open notes')
 
+    await page.keyboard.press('Control+K')
+    await expect(page.getByPlaceholder('Search notes')).toBeFocused()
+    await page.getByRole('button', { name: 'Close notes' }).tap()
+
+    await menuButton.tap()
+    await page.getByRole('button', { name: 'New note' }).tap()
+    await expect(page.getByRole('textbox', { name: 'Note title' })).toBeFocused()
+
+    const firstBlock = page.getByRole('textbox', { name: 'Text block' }).first()
+    await firstBlock.fill('/todo')
+    await firstBlock.press('Enter')
+    const checklist = page.getByRole('textbox', { name: 'To-do list block' })
+    const checkButton = page.getByRole('button', { name: 'Mark complete' })
+    const [checkBox, checklistBox, checklistPadding] = await Promise.all([
+      checkButton.boundingBox(),
+      checklist.boundingBox(),
+      checklist.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingLeft)),
+    ])
+    expect(checkBox?.height ?? 0).toBeGreaterThanOrEqual(44)
+    expect((checkBox?.x ?? 0) + (checkBox?.width ?? 0)).toBeLessThanOrEqual(
+      (checklistBox?.x ?? 0) + checklistPadding,
+    )
+
     await menuButton.tap()
     await page.getByRole('button', { name: 'Archive', exact: true }).tap()
     const toast = page.locator('.toast')
@@ -425,13 +458,20 @@ test.describe('coarse touch mobile PWA', () => {
     await expect(page.getByRole('button', { name: 'Open notes' })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
+    await page.getByRole('button', { name: 'Add cover' }).tap()
     await page.setViewportSize({ width: 915, height: 412 })
+    await session.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: 0, right: 47, bottom: 8, left: 34 },
+    })
     await expect(page.getByRole('textbox', { name: 'Note title' })).toBeVisible()
+    const removeCoverBox = await page.getByRole('button', { name: 'Remove cover' }).boundingBox()
+    expect((removeCoverBox?.x ?? 0) + (removeCoverBox?.width ?? 0)).toBeLessThanOrEqual(915 - 47)
     expect(await page.evaluate(() => ({
       fitsWidth: document.documentElement.scrollWidth <= window.innerWidth,
       shellHeight: document.querySelector('.app-shell')?.getBoundingClientRect().height,
       viewportHeight: window.innerHeight,
-    }))).toEqual({ fitsWidth: true, shellHeight: 412, viewportHeight: 412 })
+      documentPaddingLeft: getComputedStyle(document.querySelector('.document-column') as HTMLElement).paddingLeft,
+    }))).toEqual({ fitsWidth: true, shellHeight: 412, viewportHeight: 412, documentPaddingLeft: '62px' })
   })
 
   test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {

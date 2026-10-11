@@ -2085,6 +2085,10 @@ textarea:focus-visible {
   to { transform: rotate(360deg); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .is-spinning { animation: none; }
+}
+
 .empty-workspace {
   display: grid;
   place-items: center;
@@ -2470,6 +2474,16 @@ body,
   bottom: calc(20px + var(--safe-bottom));
 }
 
+.page-cover button {
+  right: calc(20px + var(--safe-right));
+}
+
+.document-column,
+.mode-draw .document-column {
+  padding-right: calc(28px + var(--safe-right));
+  padding-left: calc(28px + var(--safe-left));
+}
+
 @media (pointer: coarse) {
   .new-note-button,
   .sidebar-link,
@@ -2556,10 +2570,40 @@ body,
     font-size: 16px;
   }
 
-  .notion-editor .check-button::after {
+  .notion-editor .kind-checklist {
+    min-height: 46px;
+  }
+
+  .notion-editor .kind-checklist textarea {
+    min-height: 44px;
+    padding-left: 52px;
+  }
+
+  .notion-editor .check-button {
+    top: 1px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+  }
+
+  .notion-editor .check-button::before {
     content: '';
     position: absolute;
-    inset: -14px;
+    inset: 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-raised);
+  }
+
+  .notion-editor .check-button.checked {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .notion-editor .check-button.checked::before {
+    border-color: var(--accent);
+    background: var(--accent);
   }
 }
 
@@ -2599,10 +2643,6 @@ body,
   .note-menu {
     top: calc(58px + var(--safe-top));
     right: calc(10px + var(--safe-right));
-  }
-
-  .page-cover button {
-    right: calc(20px + var(--safe-right));
   }
 
   .document-column,

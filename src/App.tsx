@@ -60,6 +60,7 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLButtonElement>(null)
   const sidebarWasOpenRef = useRef(false)
+  const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
@@ -122,15 +123,28 @@ export default function App() {
     const isMobile = window.matchMedia('(max-width: 700px)').matches
     if (!isMobile) {
       sidebarWasOpenRef.current = sidebarOpen
+      sidebarFocusIntentRef.current = null
       return
     }
 
+    let focusFrame: number | undefined
+    const focusIntent = sidebarFocusIntentRef.current
     if (sidebarOpen) {
-      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.sidebar-close')?.focus())
+      focusFrame = requestAnimationFrame(() => {
+        if (focusIntent === 'search') searchInputRef.current?.focus()
+        else document.querySelector<HTMLButtonElement>('.sidebar-close')?.focus()
+      })
     } else if (sidebarWasOpenRef.current) {
-      requestAnimationFrame(() => mobileMenuRef.current?.focus())
+      focusFrame = requestAnimationFrame(() => {
+        if (focusIntent === 'title') titleInputRef.current?.focus()
+        else mobileMenuRef.current?.focus()
+      })
     }
+    sidebarFocusIntentRef.current = null
     sidebarWasOpenRef.current = sidebarOpen
+    return () => {
+      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+    }
   }, [sidebarOpen])
 
   useEffect(() => {
@@ -169,16 +183,21 @@ export default function App() {
 
   function createNote() {
     const note = blankNote()
+    const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
+    if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
     setNotes((current) => [note, ...current])
     setActiveId(note.id)
     setView('notes')
     setMode('type')
     setSidebarOpen(false)
     setNoteMenuOpen(false)
-    requestAnimationFrame(() => titleInputRef.current?.focus())
+    if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
   }
 
   function selectNote(id: string) {
+    if (sidebarOpen && window.matchMedia('(max-width: 700px)').matches) {
+      sidebarFocusIntentRef.current = 'title'
+    }
     setActiveId(id)
     setSidebarOpen(false)
     setNoteMenuOpen(false)
@@ -388,13 +407,22 @@ export default function App() {
         event.preventDefault()
         // The search field lives in the sidebar, which is hidden in focus mode and on mobile.
         setFocusMode(false)
-        if (window.matchMedia('(max-width: 700px)').matches) setSidebarOpen(true)
-        requestAnimationFrame(() => searchInputRef.current?.focus())
+        if (window.matchMedia('(max-width: 700px)').matches) {
+          if (sidebarOpen) searchInputRef.current?.focus()
+          else {
+            sidebarFocusIntentRef.current = 'search'
+            setSidebarOpen(true)
+          }
+        } else {
+          requestAnimationFrame(() => searchInputRef.current?.focus())
+        }
         return
       }
       if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && event.key.toLowerCase() === 'n') {
         event.preventDefault()
         const note = blankNote()
+        const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
+        if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
         setNotes((current) => [note, ...current])
         setActiveId(note.id)
         setView('notes')
@@ -403,7 +431,7 @@ export default function App() {
         setNoteMenuOpen(false)
         setWorkspaceMenuOpen(false)
         setSettingsOpen(false)
-        requestAnimationFrame(() => titleInputRef.current?.focus())
+        if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
       }
       if (event.key === 'Escape') {
         setNoteMenuOpen(false)
@@ -415,7 +443,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [setNotes])
+  }, [setNotes, sidebarOpen])
 
   if (!activeNote) return null
 

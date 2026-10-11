@@ -133,6 +133,12 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   }, [runSaveQueue])
 
   const flush = useCallback(async () => {
+    // Never let an update-triggered flush persist the starter snapshot while
+    // the IndexedDB workspace is still being read and merged.
+    while (!hydratedRef.current && mountedRef.current) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
+    }
+    if (!mountedRef.current) return statusRef.current
     persist(workspaceRef.current)
     while (saveRunningRef.current || pendingSaveRef.current) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
