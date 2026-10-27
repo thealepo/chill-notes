@@ -21,6 +21,46 @@ async function openDrawing(page: Page) {
   await expect(page.getByRole('region', { name: 'Drawing editor' })).toBeVisible()
 }
 
+async function writeIndexedWorkspaceRecord(page: Page, value: unknown) {
+  await page.evaluate(async (storedValue) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = window.indexedDB.open('chill-notes', 1)
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('workspace')) {
+          request.result.createObjectStore('workspace')
+        }
+      }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('workspace', 'readwrite')
+      transaction.objectStore('workspace').put(storedValue, 'current')
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error)
+    })
+    database.close()
+  }, value)
+}
+
+async function readIndexedWorkspaceRecord(page: Page, key: string): Promise<unknown> {
+  return page.evaluate(async (recordKey) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = window.indexedDB.open('chill-notes', 1)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const value = await new Promise<unknown>((resolve, reject) => {
+      const request = database.transaction('workspace', 'readonly').objectStore('workspace').get(recordKey)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    return value
+  }, key)
+}
+
 test.beforeEach(async ({ page }) => {
   await openCleanApp(page)
 })
@@ -218,6 +258,69 @@ test('migrates legacy localStorage notes into IndexedDB', async ({ page }) => {
 
   await page.reload()
   await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Migrated note')
+})
+
+test('protects corrupt IndexedDB data until the user explicitly replaces it', async ({ page }) => {
+  await expect(page.locator('.save-state')).toContainText('Saved')
+  const corruptRecord = '{"type":"chill-notes-workspace","version":1'
+  await writeIndexedWorkspaceRecord(page, corruptRecord)
+  await page.reload()
+
+  const recoveryAlert = page.getByRole('alert')
+  await expect(recoveryAlert).toContainText('Saved workspace needs recovery')
+  await expect(recoveryAlert).toContainText('Saving is paused')
+  await expect(page.locator('.save-state')).toContainText('Saving paused')
+
+  await page.getByRole('textbox', { name: 'Note title' }).fill('Recovered in this tab')
+  await expect.poll(() => readIndexedWorkspaceRecord(page, 'current')).toBe(corruptRecord)
+  await expect.poll(() => readIndexedWorkspaceRecord(page, 'unreadable-backup')).toBe(corruptRecord)
+
+  const downloadPromise = page.waitForEvent('download')
+  await recoveryAlert.getByRole('button', { name: 'Download original data' }).click()
+  const recoveryDownload = await downloadPromise
+  expect(recoveryDownload.suggestedFilename()).toMatch(
+    /^chill-notes-indexeddb-recovery-\d{4}-\d{2}-\d{2}\.json$/,
+  )
+  const recoveryPath = await recoveryDownload.path()
+  expect(recoveryPath).not.toBeNull()
+  if (recoveryPath) expect(await readFile(recoveryPath, 'utf8')).toBe(corruptRecord)
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await recoveryAlert.getByRole('button', { name: 'Replace saved data' }).click()
+  await expect(recoveryAlert).toBeHidden()
+  await expect(page.locator('.save-state')).toContainText('Saved')
+  await expect.poll(async () => {
+    const stored = await readIndexedWorkspaceRecord(page, 'current')
+    if (typeof stored !== 'string') return null
+    return JSON.parse(stored).notes[0]?.title
+  }).toBe('Recovered in this tab')
+  expect(await readIndexedWorkspaceRecord(page, 'unreadable-backup')).toBe(corruptRecord)
+})
+
+test('keeps unsupported future-version IndexedDB data read-only and recoverable', async ({ page }) => {
+  await expect(page.locator('.save-state')).toContainText('Saved')
+  const futureRecord = JSON.stringify({
+    type: 'chill-notes-workspace',
+    version: 99,
+    notes: [{
+      id: 'future-note',
+      title: 'Future workspace',
+      updatedAt: Date.now(),
+      favorite: false,
+      blocks: [{ id: 'future-block', kind: 'text', content: 'Do not normalize me' }],
+    }],
+    tombstones: {},
+    futureField: { preserved: true },
+  })
+  await writeIndexedWorkspaceRecord(page, futureRecord)
+  await page.reload()
+
+  const recoveryAlert = page.getByRole('alert')
+  await expect(recoveryAlert).toContainText('This saved workspace needs a newer version')
+  await expect(recoveryAlert).toContainText('version 99')
+  await expect(page.locator('.save-state')).toContainText('Saving paused')
+  await expect.poll(() => readIndexedWorkspaceRecord(page, 'current')).toBe(futureRecord)
+  await expect.poll(() => readIndexedWorkspaceRecord(page, 'unreadable-backup')).toBe(futureRecord)
 })
 
 test('warns about low browser capacity and downloads a recovery backup', async ({ page }) => {
