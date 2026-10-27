@@ -463,6 +463,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
     if (event.pointerType === 'touch') {
       event.preventDefault()
+      // A touch joining another touch begins viewport control. A palm touch
+      // must not interrupt an active mouse or stylus gesture.
+      if (activeTouchPointsRef.current.size === 0 && gestureRef.current) return
       if (activeTouchPointsRef.current.size >= 2) return
       event.currentTarget.focus({ preventScroll: true })
       event.currentTarget.setPointerCapture(event.pointerId)
