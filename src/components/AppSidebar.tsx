@@ -225,8 +225,8 @@ export function AppSidebar({
         </div>
 
         <div className="profile-card">
-          <div className="avatar">AS</div>
-          <div><strong>Alex's space</strong><span>{saveLabel}</span></div>
+          <div className="avatar" aria-hidden="true"><HardDrive size={14} /></div>
+          <div><strong>Local workspace</strong><span>{saveLabel}</span></div>
           <button
             className="icon-button profile-menu-button"
             onClick={onToggleWorkspaceMenu}
