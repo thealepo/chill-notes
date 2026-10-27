@@ -33,6 +33,12 @@ import {
 import { appendDrawingHistory, stepDrawingHistory } from '../lib/drawingHistory'
 import { downloadDrawingScene } from '../lib/drawingExport'
 import {
+  beginViewportGesture,
+  updateViewportGesture,
+  type ViewportGesturePoint,
+  type ViewportGestureSnapshot,
+} from '../lib/drawingViewportGesture'
+import {
   paintDrawingScene,
   type DrawingDraft,
   type DrawingViewport,
@@ -58,6 +64,8 @@ type PointerGesture =
   | { type: 'resize'; pointerId: number; before: DrawingScene; element: DrawingElement }
   | { type: 'pan'; pointerId: number; startX: number; startY: number; viewport: DrawingViewport }
   | { type: 'erase'; pointerId: number; before: DrawingScene; changed: boolean }
+  | { type: 'edit'; pointerId: number; before: DrawingScene }
+  | { type: 'pinch'; pointerIds: [number, number]; gesture: ViewportGestureSnapshot }
   | null
 
 interface TextEditingState {
@@ -104,6 +112,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const [draft, setDraft] = useState<DrawingDraft>(null)
   const draftRef = useRef<DrawingDraft>(null)
   const gestureRef = useRef<PointerGesture>(null)
+  const activeTouchPointsRef = useRef(new Map<number, ViewportGesturePoint>())
   const spacePanningRef = useRef(false)
   const [editing, setEditing] = useState<TextEditingState | null>(null)
   const [keyboardStatus, setKeyboardStatus] = useState('')
@@ -426,26 +435,64 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     if (event.key.startsWith('Arrow')) finishKeyboardMove()
   }
 
+  function cancelGestureForViewport(gesture: Exclude<PointerGesture, null>) {
+    if (gesture.type === 'draw' || gesture.type === 'shape') setLiveDraft(null)
+    if (gesture.type === 'move' || gesture.type === 'resize' || gesture.type === 'erase' || gesture.type === 'edit') {
+      setLiveScene(gesture.before)
+    }
+    if (gesture.type === 'edit') {
+      setEditing(null)
+      setSelectedId(null)
+    }
+  }
+
+  function beginTouchViewportGesture() {
+    const touches = [...activeTouchPointsRef.current.entries()]
+    if (touches.length !== 2) return
+    const currentGesture = gestureRef.current
+    if (currentGesture && currentGesture.type !== 'pinch') cancelGestureForViewport(currentGesture)
+    const [[firstId, firstPoint], [secondId, secondPoint]] = touches
+    gestureRef.current = {
+      type: 'pinch',
+      pointerIds: [firstId, secondId],
+      gesture: beginViewportGesture(viewportRef.current, firstPoint, secondPoint),
+    }
+  }
+
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return
-    // This editor intentionally supports one gesture at a time. Ignore an extra
-    // finger instead of allowing it to replace and corrupt the active stroke.
-    if ((event.pointerType === 'touch' && !event.isPrimary) || gestureRef.current) {
+    if (event.pointerType === 'touch') {
+      event.preventDefault()
+      // A touch joining another touch begins viewport control. A palm touch
+      // must not interrupt an active mouse or stylus gesture.
+      if (activeTouchPointsRef.current.size === 0 && gestureRef.current) return
+      if (activeTouchPointsRef.current.size >= 2) return
+      event.currentTarget.focus({ preventScroll: true })
+      event.currentTarget.setPointerCapture(event.pointerId)
+      activeTouchPointsRef.current.set(event.pointerId, screenPoint(event.clientX, event.clientY))
+      if (activeTouchPointsRef.current.size === 2) {
+        beginTouchViewportGesture()
+        return
+      }
+    } else if (gestureRef.current) {
       event.preventDefault()
       return
     }
     event.preventDefault()
     event.currentTarget.focus({ preventScroll: true })
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
     const point = worldPoint(event.clientX, event.clientY, event.pressure)
+    const screen = screenPoint(event.clientX, event.clientY)
     const shouldPan = tool === 'hand' || spacePanningRef.current || event.button === 1
 
     if (shouldPan) {
       gestureRef.current = {
         type: 'pan',
         pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
+        startX: screen.x,
+        startY: screen.y,
         viewport: { ...viewportRef.current },
       }
       return
@@ -494,7 +541,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     }
 
     if (tool === 'text' || tool === 'sticky') {
+      const before = cloneScene(sceneRef.current)
       startTextEditing(tool, point)
+      if (event.pointerType === 'touch') gestureRef.current = { type: 'edit', pointerId: event.pointerId, before }
       return
     }
 
@@ -526,15 +575,29 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerType === 'touch' && activeTouchPointsRef.current.has(event.pointerId)) {
+      activeTouchPointsRef.current.set(event.pointerId, screenPoint(event.clientX, event.clientY))
+    }
     const gesture = gestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
+    if (!gesture) return
+    if (gesture.type === 'pinch') {
+      if (!gesture.pointerIds.includes(event.pointerId)) return
+      const first = activeTouchPointsRef.current.get(gesture.pointerIds[0])
+      const second = activeTouchPointsRef.current.get(gesture.pointerIds[1])
+      if (!first || !second) return
+      event.preventDefault()
+      setLiveViewport(updateViewportGesture(gesture.gesture, first, second, MIN_ZOOM, MAX_ZOOM))
+      return
+    }
+    if (gesture.pointerId !== event.pointerId) return
     event.preventDefault()
 
     if (gesture.type === 'pan') {
+      const screen = screenPoint(event.clientX, event.clientY)
       setLiveViewport({
         ...gesture.viewport,
-        x: gesture.viewport.x + event.clientX - gesture.startX,
-        y: gesture.viewport.y + event.clientY - gesture.startY,
+        x: gesture.viewport.x + screen.x - gesture.startX,
+        y: gesture.viewport.y + screen.y - gesture.startY,
       })
       return
     }
@@ -585,8 +648,25 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   }
 
   function finishGesture(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerType === 'touch') activeTouchPointsRef.current.delete(event.pointerId)
     const gesture = gestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
+    if (!gesture) return
+    if (gesture.type === 'pinch') {
+      if (!gesture.pointerIds.includes(event.pointerId)) return
+      const remainingId = gesture.pointerIds.find((pointerId) => activeTouchPointsRef.current.has(pointerId))
+      const remainingPoint = remainingId === undefined ? undefined : activeTouchPointsRef.current.get(remainingId)
+      gestureRef.current = remainingId !== undefined && remainingPoint
+        ? {
+            type: 'pan',
+            pointerId: remainingId,
+            startX: remainingPoint.x,
+            startY: remainingPoint.y,
+            viewport: { ...viewportRef.current },
+          }
+        : null
+      return
+    }
+    if (gesture.pointerId !== event.pointerId) return
     gestureRef.current = null
 
     if (event.type === 'pointercancel') {
@@ -847,7 +927,11 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       <div className="drawing-tip" role="status" aria-live="polite" aria-atomic="true">
         {exportStatus
           ? <><Download size={14} />{exportStatus}</>
-          : <><RotateCcw size={14} />Auto-saved · keyboard: V then Enter selects · arrows move · shape key then Enter creates</>}
+          : <>
+              <RotateCcw size={14} />
+              Auto-saved · <span className="drawing-tip-touch">pinch to zoom · two fingers move</span>
+              <span className="drawing-tip-keyboard">keyboard: V then Enter selects · arrows move · shape key then Enter creates</span>
+            </>}
       </div>
     </section>
   )
