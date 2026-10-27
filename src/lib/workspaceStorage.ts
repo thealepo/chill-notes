@@ -1,6 +1,5 @@
 import {
   classifyStoredWorkspaceValue,
-  normalizeStoredWorkspace,
   serializeStoredWorkspace,
   type StoredWorkspaceRead,
   type StoredWorkspace,
