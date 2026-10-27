@@ -5,6 +5,7 @@ import {
   mergeStoredWorkspaces,
   normalizeStoredNotes,
   normalizeStoredWorkspace,
+  classifyStoredWorkspaceValue,
   serializeStoredWorkspace,
   type StoredWorkspace,
 } from '../src/lib/noteSerialization.ts'
@@ -88,6 +89,59 @@ test('versioned workspace round-trips notes and tombstones', () => {
   }
 
   assert.deepEqual(normalizeStoredWorkspace(JSON.parse(serializeStoredWorkspace(workspace))), workspace)
+})
+
+test('IndexedDB reads distinguish an absent workspace from valid data', () => {
+  assert.deepEqual(classifyStoredWorkspaceValue(undefined), { kind: 'empty' })
+
+  const workspace: StoredWorkspace = { notes: [note('stored', 20)], tombstones: {} }
+  assert.deepEqual(classifyStoredWorkspaceValue(serializeStoredWorkspace(workspace)), {
+    kind: 'valid',
+    workspace,
+  })
+})
+
+test('IndexedDB reads retain malformed data for recovery', () => {
+  const malformed = '{"type":"chill-notes-workspace","version":1'
+
+  assert.deepEqual(classifyStoredWorkspaceValue(malformed), {
+    kind: 'corrupt',
+    raw: malformed,
+    preserved: false,
+  })
+  assert.deepEqual(classifyStoredWorkspaceValue(null), {
+    kind: 'corrupt',
+    raw: 'null',
+    preserved: false,
+  })
+})
+
+test('IndexedDB reads identify unsupported workspace versions without normalizing them', () => {
+  const unsupported = JSON.stringify({
+    type: 'chill-notes-workspace',
+    version: 7,
+    notes: [note('future', 30)],
+    tombstones: {},
+    futureField: 'keep me',
+  })
+
+  assert.deepEqual(classifyStoredWorkspaceValue(unsupported), {
+    kind: 'unsupported-version',
+    raw: unsupported,
+    preserved: false,
+    version: 7,
+  })
+})
+
+test('IndexedDB reads treat an unusable current-version envelope as corrupt', () => {
+  const unusable = JSON.stringify({
+    type: 'chill-notes-workspace',
+    version: 1,
+    notes: [{ id: 'broken', blocks: 'not-an-array' }],
+    tombstones: {},
+  })
+
+  assert.equal(classifyStoredWorkspaceValue(unusable).kind, 'corrupt')
 })
 
 test('storage usage warns before the browser quota is exhausted', () => {

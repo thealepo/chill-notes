@@ -1,6 +1,8 @@
 import {
+  classifyStoredWorkspaceValue,
   normalizeStoredWorkspace,
   serializeStoredWorkspace,
+  type StoredWorkspaceRead,
   type StoredWorkspace,
 } from './noteSerialization'
 import { classifyStorageUsage, type StorageUsage } from './storageUsage'
@@ -14,6 +16,7 @@ const DATABASE_NAME = 'chill-notes'
 const DATABASE_VERSION = 1
 const WORKSPACE_STORE = 'workspace'
 const CURRENT_WORKSPACE_KEY = 'current'
+export const INDEXED_WORKSPACE_RECOVERY_KEY = 'unreadable-backup'
 let databasePromise: Promise<IDBDatabase> | null = null
 
 export interface LegacyWorkspaceRead {
@@ -21,6 +24,9 @@ export interface LegacyWorkspaceRead {
   storageAvailable: boolean
   unreadableDataPreserved: boolean
 }
+
+export type IndexedWorkspaceRead = StoredWorkspaceRead
+export { classifyStoredWorkspaceValue as classifyIndexedWorkspaceValue }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -66,13 +72,8 @@ function openWorkspaceDatabase(): Promise<IDBDatabase> {
 }
 
 function parseWorkspace(value: unknown): StoredWorkspace | null {
-  try {
-    const parsed = typeof value === 'string' ? JSON.parse(value) : value
-    const workspace = normalizeStoredWorkspace(parsed)
-    return workspace.notes.length > 0 ? workspace : null
-  } catch {
-    return null
-  }
+  const result = classifyStoredWorkspaceValue(value)
+  return result.kind === 'valid' ? result.workspace : null
 }
 
 export function readLegacyWorkspace(): LegacyWorkspaceRead {
@@ -104,11 +105,34 @@ export function readLegacyWorkspace(): LegacyWorkspaceRead {
   return { workspace: null, storageAvailable: true, unreadableDataPreserved }
 }
 
-export async function readIndexedWorkspace(): Promise<StoredWorkspace | null> {
+export async function readIndexedWorkspace(): Promise<IndexedWorkspaceRead> {
   const database = await openWorkspaceDatabase()
   const transaction = database.transaction(WORKSPACE_STORE, 'readonly')
   const stored = await requestResult(transaction.objectStore(WORKSPACE_STORE).get(CURRENT_WORKSPACE_KEY))
-  return parseWorkspace(stored)
+  const result = classifyStoredWorkspaceValue(stored)
+  if (result.kind !== 'corrupt' && result.kind !== 'unsupported-version') return result
+
+  let preserved = false
+  try {
+    const recoveryTransaction = database.transaction(WORKSPACE_STORE, 'readwrite')
+    const completed = new Promise<void>((resolve, reject) => {
+      recoveryTransaction.oncomplete = () => resolve()
+      recoveryTransaction.onerror = () => reject(
+        recoveryTransaction.error ?? new Error('IndexedDB recovery transaction failed.'),
+      )
+      recoveryTransaction.onabort = () => reject(
+        recoveryTransaction.error ?? new Error('IndexedDB recovery transaction was aborted.'),
+      )
+    })
+    recoveryTransaction.objectStore(WORKSPACE_STORE).put(stored, INDEXED_WORKSPACE_RECOVERY_KEY)
+    await completed
+    preserved = true
+  } catch {
+    // The original `current` record is still untouched. The raw in-memory copy
+    // remains downloadable even if the browser rejects the safety copy.
+  }
+
+  return { ...result, preserved }
 }
 
 export async function writeIndexedWorkspace(workspace: StoredWorkspace): Promise<void> {
