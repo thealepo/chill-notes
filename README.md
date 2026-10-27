@@ -15,12 +15,12 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 - One-click JSON recovery backups, defensive import, and per-note Markdown export
 - Conflict-safe synchronization between open browser tabs
 - System-aware light and dark themes with persisted Light, Dark, and System preferences
-- IndexedDB persistence with automatic localStorage migration, capacity warnings, and no account required
+- IndexedDB persistence with automatic localStorage migration, corruption recovery, capacity warnings, and no account required
 - Installable mobile/desktop PWA with an offline app shell, adaptive icons, safe-area layouts, and touch-friendly controls
 
 The theme selector is under **Settings → Appearance** in the sidebar. System mode follows OS theme changes live; explicit Light and Dark choices are saved in the browser and applied before the app paints to avoid a theme flash.
 
-Notes and drawings are saved in IndexedDB, which provides substantially more room than localStorage for drawing-heavy workspaces. Existing `chill-notes-v1` localStorage data moves automatically on first load. The workspace menu shows the browser's storage estimate when available; if capacity gets low or saving fails, Chill Notes keeps the current tab usable and presents a **Download backup** action for immediate recovery.
+Notes and drawings are saved in IndexedDB, which provides substantially more room than localStorage for drawing-heavy workspaces. Existing `chill-notes-v1` localStorage data moves automatically on first load. If the IndexedDB record is corrupt or belongs to an unsupported future version, Chill Notes preserves the original record, pauses saving, and offers an exact recovery download before allowing an explicit replacement. The workspace menu shows the browser's storage estimate when available; if capacity gets low or saving fails, Chill Notes keeps the current tab usable and presents a **Download backup** action for immediate recovery.
 
 ## Install and use offline
 

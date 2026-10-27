@@ -2011,6 +2011,20 @@ textarea:focus-visible {
   background: var(--surface);
 }
 
+.storage-recovery-notice.is-data-recovery {
+  width: min(680px, calc(100vw - 290px));
+}
+
+.storage-recovery-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.storage-recovery-notice .storage-recovery-replace {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .pwa-update-notice {
   position: fixed;
   z-index: 76;
@@ -2720,5 +2734,34 @@ body,
 
   .app-shell:has(.storage-recovery-notice):has(.pwa-update-notice) .toast {
     bottom: calc(280px + var(--safe-bottom));
+  }
+}
+
+@media (min-width: 701px) {
+  .app-shell:has(.storage-recovery-notice.is-data-recovery) .pwa-update-notice {
+    top: calc(184px + var(--safe-top));
+  }
+}
+
+@media (max-width: 700px) {
+  .storage-recovery-notice.is-data-recovery {
+    width: auto;
+  }
+
+  .storage-recovery-actions {
+    grid-column: 1 / -1;
+  }
+
+  .storage-recovery-actions button {
+    justify-content: center;
+  }
+
+  .app-shell:has(.storage-recovery-notice.is-data-recovery) .pwa-update-notice,
+  .app-shell:has(.storage-recovery-notice.is-data-recovery) .toast {
+    bottom: calc(205px + var(--safe-bottom));
+  }
+
+  .app-shell:has(.storage-recovery-notice.is-data-recovery):has(.pwa-update-notice) .toast {
+    bottom: calc(335px + var(--safe-bottom));
   }
 }

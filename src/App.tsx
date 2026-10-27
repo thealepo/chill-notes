@@ -42,6 +42,8 @@ export default function App() {
     usage: storageUsage,
     syncedAt,
     flush: flushWorkspace,
+    recovery: workspaceRecovery,
+    replaceUnsafeWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
   const notes = workspaceState.notes
   const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
@@ -299,6 +301,24 @@ export default function App() {
     setNotice(`Exported ${notes.length} ${notes.length === 1 ? 'note' : 'notes'} as JSON.`)
   }
 
+  function downloadWorkspaceRecovery() {
+    if (!workspaceRecovery) return
+    const file = new Blob([workspaceRecovery.raw], { type: 'application/json;charset=utf-8' })
+    downloadFile(file, `chill-notes-indexeddb-recovery-${new Date().toISOString().slice(0, 10)}.json`)
+    setNotice('Downloaded the original IndexedDB data.')
+  }
+
+  function replaceRecoveredWorkspace() {
+    if (!workspaceRecovery) return
+    const confirmed = window.confirm(
+      'Replace the unreadable saved workspace with the workspace currently open in this tab? '
+      + 'Download the original data first if you may need it later.',
+    )
+    if (!confirmed) return
+    replaceUnsafeWorkspace()
+    setNotice('Replacing the saved workspace with the current one.')
+  }
+
   function exportActiveNoteAsMarkdown() {
     if (!activeNote) return
     const file = new Blob([noteToMarkdown(activeNote)], { type: 'text/markdown;charset=utf-8' })
@@ -357,8 +377,10 @@ export default function App() {
       setNotice('Update paused because saving is taking longer than expected. Try again in a moment.')
       return false
     }
-    if (savedStatus.phase === 'error') {
-      setNotice('Update paused because your latest changes are not saved. Download a backup first.')
+    if (savedStatus.phase === 'error' || savedStatus.phase === 'recovery') {
+      setNotice(savedStatus.phase === 'recovery'
+        ? 'Update paused while saved data needs recovery. Download or replace it first.'
+        : 'Update paused because your latest changes are not saved. Download a backup first.')
       return false
     }
     return true
@@ -456,7 +478,10 @@ export default function App() {
       <StorageRecoveryNotice
         status={storageStatus}
         usage={storageUsage}
+        recovery={workspaceRecovery}
         onDownloadBackup={exportNotes}
+        onDownloadRecovery={downloadWorkspaceRecovery}
+        onReplaceWorkspace={replaceRecoveredWorkspace}
       />
       {pwa.needRefresh && (
         <PwaUpdateNotice

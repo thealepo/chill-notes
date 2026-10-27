@@ -24,11 +24,31 @@ export interface StoredWorkspace {
   tombstones: Record<string, number>
 }
 
-const STORED_WORKSPACE_TYPE = 'chill-notes-workspace'
-const STORED_WORKSPACE_VERSION = 1
+export type StoredWorkspaceRead =
+  | { kind: 'empty' }
+  | { kind: 'valid'; workspace: StoredWorkspace }
+  | { kind: 'corrupt'; raw: string; preserved: boolean }
+  | {
+      kind: 'unsupported-version'
+      raw: string
+      preserved: boolean
+      version: number | string | null
+    }
+
+export const STORED_WORKSPACE_TYPE = 'chill-notes-workspace'
+export const STORED_WORKSPACE_VERSION = 1
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function recoveryText(value: unknown): string {
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value)
+  } catch {
+    return String(value)
+  }
 }
 
 function normalizeImportedBlock(value: unknown): NoteBlock | null {
@@ -159,6 +179,39 @@ export function normalizeStoredWorkspace(value: unknown): StoredWorkspace {
     (tombstones[note.id] ?? -1) < note.updatedAt
   ))
   return { notes, tombstones }
+}
+
+/** Classifies persisted data without normalizing recovery cases into emptiness. */
+export function classifyStoredWorkspaceValue(value: unknown): StoredWorkspaceRead {
+  if (value === undefined) return { kind: 'empty' }
+
+  let parsed: unknown
+  try {
+    parsed = typeof value === 'string' ? JSON.parse(value) : value
+  } catch {
+    return { kind: 'corrupt', raw: recoveryText(value), preserved: false }
+  }
+
+  if (
+    isRecord(parsed)
+    && parsed.type === STORED_WORKSPACE_TYPE
+    && parsed.version !== STORED_WORKSPACE_VERSION
+  ) {
+    const version = typeof parsed.version === 'number' || typeof parsed.version === 'string'
+      ? parsed.version
+      : null
+    return {
+      kind: 'unsupported-version',
+      raw: recoveryText(value),
+      preserved: false,
+      version,
+    }
+  }
+
+  const workspace = normalizeStoredWorkspace(parsed)
+  return workspace.notes.length > 0
+    ? { kind: 'valid', workspace }
+    : { kind: 'corrupt', raw: recoveryText(value), preserved: false }
 }
 
 function preferredNote(first: Note | undefined, second: Note | undefined): Note | undefined {
