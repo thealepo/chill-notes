@@ -114,11 +114,13 @@ export function AppSidebar({
     ? 'Loading local notes'
     : storageStatus.phase === 'saving'
       ? 'Saving locally…'
-      : storageStatus.phase === 'error'
-        ? 'Not saved — download a backup'
-        : storageStatus.phase === 'warning'
-          ? 'Saved with limited storage'
-          : 'Saved locally'
+      : storageStatus.phase === 'recovery'
+        ? 'Saving paused — recover saved data'
+        : storageStatus.phase === 'error'
+          ? 'Not saved — download a backup'
+          : storageStatus.phase === 'warning'
+            ? 'Saved with limited storage'
+            : 'Saved locally'
 
   return (
     <aside className={`sidebar ${open ? 'is-open' : ''}`}>

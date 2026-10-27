@@ -58,17 +58,20 @@ export function NoteWorkspace({
   onDelete,
   onUpdateNote,
 }: NoteWorkspaceProps) {
-  const saveFailed = saveStatus === 'error'
+  const recoveryNeeded = saveStatus === 'recovery'
+  const saveFailed = saveStatus === 'error' || recoveryNeeded
   const saveWarning = saveStatus === 'warning'
   const saveLabel = saveStatus === 'loading'
     ? 'Loading'
     : saveStatus === 'saving'
       ? 'Saving…'
-      : saveFailed
-        ? 'Not saved'
-        : saveWarning
-          ? 'Saved (limited)'
-          : 'Saved'
+      : recoveryNeeded
+        ? 'Saving paused'
+        : saveFailed
+          ? 'Not saved'
+          : saveWarning
+            ? 'Saved (limited)'
+            : 'Saved'
 
   return (
     <main className="workspace">

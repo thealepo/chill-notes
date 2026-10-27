@@ -24,15 +24,23 @@ import {
   WORKSPACE_SYNC_KEY,
   writeIndexedWorkspace,
   writeLegacyWorkspace,
+  type IndexedWorkspaceRead,
 } from '../lib/workspaceStorage'
 
-export type WorkspaceSavePhase = 'loading' | 'saving' | 'saved' | 'warning' | 'error'
+export type WorkspaceSavePhase = 'loading' | 'saving' | 'saved' | 'warning' | 'error' | 'recovery'
 export type WorkspaceStorageBackend = 'indexeddb' | 'localstorage'
 
 export interface WorkspaceStorageStatus {
   phase: WorkspaceSavePhase
   backend: WorkspaceStorageBackend | null
   detail?: string
+}
+
+export interface WorkspaceRecovery {
+  kind: 'corrupt' | 'unsupported-version'
+  raw: string
+  preserved: boolean
+  version?: number | string | null
 }
 
 interface UseWorkspaceStorageResult {
@@ -42,6 +50,8 @@ interface UseWorkspaceStorageResult {
   usage: StorageUsage | null
   syncedAt: number | null
   flush: () => Promise<WorkspaceStorageStatus>
+  recovery: WorkspaceRecovery | null
+  replaceUnsafeWorkspace: () => void
 }
 
 interface PendingWorkspaceSave {
@@ -51,6 +61,8 @@ interface PendingWorkspaceSave {
 
 const IDB_FALLBACK_DETAIL = 'Using limited browser storage. Download a backup before adding large drawings.'
 const SAVE_FAILED_DETAIL = 'Changes are only in this tab. Download a recovery backup before closing it.'
+const CORRUPT_WORKSPACE_DETAIL = 'Saved browser data could not be read. Saving is paused to protect the original record.'
+const UNSUPPORTED_WORKSPACE_DETAIL = 'This workspace uses an unsupported storage version. Saving is paused to protect it.'
 
 function sameWorkspace(first: StoredWorkspace, second: StoredWorkspace): boolean {
   return serializeStoredWorkspace(first) === serializeStoredWorkspace(second)
@@ -66,6 +78,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const [status, setStatus] = useState<WorkspaceStorageStatus>({ phase: 'loading', backend: null })
   const [usage, setUsage] = useState<StorageUsage | null>(null)
   const [syncedAt, setSyncedAt] = useState<number | null>(null)
+  const [recovery, setRecovery] = useState<WorkspaceRecovery | null>(null)
   const hydratedRef = useRef(false)
   const touchedBeforeHydrationRef = useRef(false)
   const workspaceRef = useRef(workspace)
@@ -75,6 +88,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const saveRunningRef = useRef(false)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const mountedRef = useRef(true)
+  const persistenceBlockedRef = useRef(false)
   workspaceRef.current = workspace
 
   const setWorkspace: Dispatch<SetStateAction<StoredWorkspace>> = useCallback((update) => {
@@ -87,11 +101,38 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     if (mountedRef.current) setUsage(nextUsage)
   }, [])
 
+  const blockPersistenceForRecovery = useCallback((result: IndexedWorkspaceRead) => {
+    if (result.kind !== 'corrupt' && result.kind !== 'unsupported-version') return
+    persistenceBlockedRef.current = true
+    pendingSaveRef.current = null
+    revisionRef.current += 1
+    const nextRecovery: WorkspaceRecovery = {
+      kind: result.kind,
+      raw: result.raw,
+      preserved: result.preserved,
+      ...(result.kind === 'unsupported-version' ? { version: result.version } : {}),
+    }
+    const nextStatus: WorkspaceStorageStatus = {
+      phase: 'recovery',
+      backend: 'indexeddb',
+      detail: result.kind === 'unsupported-version'
+        ? UNSUPPORTED_WORKSPACE_DETAIL
+        : CORRUPT_WORKSPACE_DETAIL,
+    }
+    statusRef.current = nextStatus
+    setRecovery(nextRecovery)
+    setStatus(nextStatus)
+  }, [])
+
   const runSaveQueue = useCallback(async () => {
     if (saveRunningRef.current) return
     saveRunningRef.current = true
 
     while (pendingSaveRef.current) {
+      if (persistenceBlockedRef.current) {
+        pendingSaveRef.current = null
+        break
+      }
       const { snapshot, revision } = pendingSaveRef.current
       pendingSaveRef.current = null
       let nextStatus: WorkspaceStorageStatus
@@ -124,6 +165,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   }, [refreshUsage])
 
   const persist = useCallback((snapshot: StoredWorkspace) => {
+    if (persistenceBlockedRef.current) return
     const revision = ++revisionRef.current
     pendingSaveRef.current = { snapshot, revision }
     const savingStatus = { ...statusRef.current, phase: 'saving' } satisfies WorkspaceStorageStatus
@@ -139,6 +181,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
       await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
     }
     if (!mountedRef.current) return statusRef.current
+    if (persistenceBlockedRef.current) return statusRef.current
     persist(workspaceRef.current)
     while (saveRunningRef.current || pendingSaveRef.current) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
@@ -152,14 +195,20 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     const legacyRead = legacyReadRef.current
 
     void (async () => {
-      let indexedWorkspace: StoredWorkspace | null = null
+      let indexedRead: IndexedWorkspaceRead | null = null
       try {
-        indexedWorkspace = await readIndexedWorkspace()
+        indexedRead = await readIndexedWorkspace()
       } catch {
         // The first save below will attempt localStorage if IndexedDB stays unavailable.
       }
 
       if (cancelled || !mountedRef.current) return
+      if (indexedRead?.kind === 'corrupt' || indexedRead?.kind === 'unsupported-version') {
+        hydratedRef.current = true
+        blockPersistenceForRecovery(indexedRead)
+        return
+      }
+      const indexedWorkspace = indexedRead?.kind === 'valid' ? indexedRead.workspace : null
       const currentWorkspace = workspaceRef.current
       const shouldMergeCurrent = Boolean(legacyRead?.workspace) || touchedBeforeHydrationRef.current
       const hydratedWorkspace = indexedWorkspace
@@ -180,7 +229,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
       cancelled = true
       mountedRef.current = false
     }
-  }, [persist])
+  }, [blockPersistenceForRecovery, persist])
 
   useEffect(() => {
     if (!hydratedRef.current) return
@@ -191,9 +240,14 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     async function mergeLatestIndexedWorkspace() {
       try {
         const incoming = await readIndexedWorkspace()
-        if (!incoming || !mountedRef.current) return
+        if (!mountedRef.current) return
+        if (incoming.kind === 'corrupt' || incoming.kind === 'unsupported-version') {
+          blockPersistenceForRecovery(incoming)
+          return
+        }
+        if (incoming.kind !== 'valid') return
         setWorkspaceState((current) => {
-          const merged = mergeStoredWorkspaces(current, incoming)
+          const merged = mergeStoredWorkspaces(current, incoming.workspace)
           if (sameWorkspace(current, merged)) return current
           workspaceRef.current = merged
           return merged
@@ -240,7 +294,23 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
       channel?.close()
       if (channelRef.current === channel) channelRef.current = null
     }
-  }, [])
+  }, [blockPersistenceForRecovery])
 
-  return { workspace, setWorkspace, status, usage, syncedAt, flush }
+  const replaceUnsafeWorkspace = useCallback(() => {
+    if (!persistenceBlockedRef.current) return
+    persistenceBlockedRef.current = false
+    setRecovery(null)
+    persist(workspaceRef.current)
+  }, [persist])
+
+  return {
+    workspace,
+    setWorkspace,
+    status,
+    usage,
+    syncedAt,
+    flush,
+    recovery,
+    replaceUnsafeWorkspace,
+  }
 }
