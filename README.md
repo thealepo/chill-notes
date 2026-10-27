@@ -45,6 +45,7 @@ Updates are never applied in the middle of editing without permission. When a fr
 - Press `R`, `O`, `L`, `A`, `T`, or `S`, then Enter, to create a rectangle, ellipse, line, arrow, text box, or sticky note at the visible center
 - Delete or Backspace removes the selected object, and Escape clears the selection
 - Mod+Z undoes, Mod+Shift+Z redoes, `+`/`-` zoom, and Space temporarily enables panning while the canvas is focused
+- On touch devices, pinch to zoom and drag with two fingers to pan without changing the drawing or its undo history
 
 ## Run locally
 

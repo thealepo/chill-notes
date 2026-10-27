@@ -924,7 +924,11 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       <div className="drawing-tip" role="status" aria-live="polite" aria-atomic="true">
         {exportStatus
           ? <><Download size={14} />{exportStatus}</>
-          : <><RotateCcw size={14} />Auto-saved · keyboard: V then Enter selects · arrows move · shape key then Enter creates</>}
+          : <>
+              <RotateCcw size={14} />
+              Auto-saved · <span className="drawing-tip-touch">pinch to zoom · two fingers move</span>
+              <span className="drawing-tip-keyboard">keyboard: V then Enter selects · arrows move · shape key then Enter creates</span>
+            </>}
       </div>
     </section>
   )

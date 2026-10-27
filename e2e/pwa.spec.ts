@@ -513,7 +513,7 @@ test.describe('coarse touch mobile PWA', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
 
-  test('draws with touch while an extra finger cannot replace the active stroke', async ({ page, context }) => {
+  test('pinches to zoom, pans with two fingers, and cancels a transient stroke safely', async ({ page, context }) => {
     await openCleanApp(page)
     await page.getByRole('tab', { name: 'Draw' }).tap()
     const penTool = page.getByRole('button', { name: 'Pen (P)' })
@@ -527,44 +527,29 @@ test.describe('coarse touch mobile PWA', () => {
 
     const scrollTop = await page.locator('.workspace-scroll').evaluate((element) => element.scrollTop)
     const session = await context.newCDPSession(page)
-    const primary = (x: number, y: number, force = 0.55) => ({ id: 1, x: bounds.x + x, y: bounds.y + y, force })
-    const secondary = (x: number, y: number) => ({ id: 2, x: bounds.x + x, y: bounds.y + y, force: 0.7 })
+    const touch = (id: number, x: number, y: number, force = 0.55) => ({ id, x: bounds.x + x, y: bounds.y + y, force })
 
-    await dispatchTouch(session, 'touchStart', [primary(60, 80, 0.3)])
-    await dispatchTouch(session, 'touchMove', [primary(100, 100, 0.45)])
-    await dispatchTouch(session, 'touchStart', [primary(100, 100, 0.45), secondary(bounds.width - 45, 55)])
-    await dispatchTouch(session, 'touchMove', [primary(145, 125, 0.6), secondary(bounds.width - 45, 180)])
-    await dispatchTouch(session, 'touchMove', [primary(190, 150, 0.75), secondary(bounds.width - 45, 280)])
+    await dispatchTouch(session, 'touchStart', [touch(1, 100, 120, 0.3)])
+    await dispatchTouch(session, 'touchMove', [touch(1, 115, 125, 0.45)])
+    await dispatchTouch(session, 'touchStart', [touch(1, 115, 125), touch(2, 275, 125)])
+    await dispatchTouch(session, 'touchMove', [touch(1, 80, 170), touch(2, 340, 170)])
     await dispatchTouch(session, 'touchEnd', [])
 
-    await expect(page.getByRole('toolbar', { name: 'Selected object actions' })).toContainText('Pen selected')
     expect(await page.locator('.workspace-scroll').evaluate((element) => element.scrollTop)).toBe(scrollTop)
-
-    await expect.poll(async () => {
-      const drawing = await persistedDrawing(page)
-      return drawing?.elements.length ?? 0
-    }).toBe(1)
-    const drawing = await persistedDrawing(page)
-    expect(drawing?.elements[0]).toMatchObject({ type: 'pen' })
-    expect(drawing?.elements[0].points?.length ?? 0).toBeGreaterThanOrEqual(4)
-    expect(drawing?.elements[0].x ?? Number.POSITIVE_INFINITY).toBeLessThan(100)
-    expect(drawing?.elements[0].width ?? Number.POSITIVE_INFINITY).toBeGreaterThan(100)
-    expect(drawing?.elements[0].width ?? Number.POSITIVE_INFINITY).toBeLessThan(170)
-    expect(drawing?.elements[0].height ?? Number.POSITIVE_INFINITY).toBeGreaterThan(50)
-    expect(drawing?.elements[0].height ?? Number.POSITIVE_INFINITY).toBeLessThan(100)
-    const points = drawing?.elements[0].points ?? []
-    expect(points[0]).toMatchObject({ x: 0, y: 0 })
-    expect(points.at(-1)?.x).toBeCloseTo(1)
-    expect(points.at(-1)?.y).toBeCloseTo(1)
-    await expect(page.getByRole('button', { name: 'Clear board' })).toBeEnabled()
-
-    const undo = page.getByRole('button', { name: 'Undo' })
-    const redo = page.getByRole('button', { name: 'Redo' })
-    await undo.click()
-    await expect(redo).toBeEnabled()
+    await expect(page.locator('.zoom-level')).toHaveText(/1[5-9]\d%|2\d\d%/)
+    await expect(page.getByRole('button', { name: 'Clear board' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
     await expect.poll(async () => (await persistedDrawing(page))?.elements.length ?? 0).toBe(0)
-    await expect(undo).toBeDisabled()
-    await redo.click()
+
+    await dispatchTouch(session, 'touchStart', [touch(3, 90, 90, 0.3)])
+    await dispatchTouch(session, 'touchMove', [touch(3, 125, 115, 0.5)])
+    await dispatchTouch(session, 'touchMove', [touch(3, 165, 145, 0.7)])
+    await dispatchTouch(session, 'touchEnd', [])
+
+    await expect.poll(async () => (await persistedDrawing(page))?.elements.length ?? 0).toBe(1)
+    expect((await persistedDrawing(page))?.elements[0]).toMatchObject({ type: 'pen' })
+    await expect(page.getByRole('toolbar', { name: 'Selected object actions' })).toContainText('Pen selected')
     await expect(page.getByRole('button', { name: 'Clear board' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled()
   })
 })

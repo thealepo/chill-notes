@@ -2380,6 +2380,7 @@ textarea.title-input {
 .tool-group button { font-size: 12px; }
 .canvas-corner-label { font-size: 11px; }
 .drawing-tip { font-size: 12px; }
+.drawing-tip-touch { display: none; }
 
 @media (hover: none) {
   .key-hint { display: none; }
@@ -2486,6 +2487,9 @@ body,
 }
 
 @media (pointer: coarse) {
+  .drawing-tip-touch { display: inline; }
+  .drawing-tip-keyboard { display: none; }
+
   .new-note-button,
   .sidebar-link,
   .workspace-menu button,
