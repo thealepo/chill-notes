@@ -13,10 +13,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { RefObject } from 'react'
+import { useCallback, useEffect, useState, type RefObject } from 'react'
 import type { WorkspaceSavePhase } from '../hooks/useWorkspaceStorage'
-import type { EditorMode, Note } from '../types'
+import { NOTE_COVER_OPTIONS } from '../lib/noteAppearance'
+import type { EditorMode, Note, NoteCover } from '../types'
 import { DrawingCanvas } from './DrawingCanvas'
+import { NoteAppearancePicker } from './NoteAppearancePicker'
 import { NoteEditor } from './NoteEditor'
 
 interface NoteWorkspaceProps {
@@ -58,6 +60,7 @@ export function NoteWorkspace({
   onDelete,
   onUpdateNote,
 }: NoteWorkspaceProps) {
+  const [appearancePicker, setAppearancePicker] = useState<'icon' | 'cover' | null>(null)
   const recoveryNeeded = saveStatus === 'recovery'
   const saveFailed = saveStatus === 'error' || recoveryNeeded
   const saveWarning = saveStatus === 'warning'
@@ -72,6 +75,24 @@ export function NoteWorkspace({
           : saveWarning
             ? 'Saved (limited)'
             : 'Saved'
+
+  const closeAppearancePicker = useCallback(() => setAppearancePicker(null), [])
+
+  useEffect(() => {
+    setAppearancePicker(null)
+  }, [note.id])
+
+  function selectIcon(pageIcon: string | undefined) {
+    onUpdateNote({ ...note, pageIcon, updatedAt: Date.now() })
+    closeAppearancePicker()
+  }
+
+  function selectCover(pageCover: NoteCover | undefined) {
+    onUpdateNote({ ...note, pageCover, updatedAt: Date.now() })
+    closeAppearancePicker()
+  }
+
+  const coverLabel = NOTE_COVER_OPTIONS.find(({ id }) => id === note.pageCover)?.label
 
   return (
     <main className="workspace">
@@ -123,27 +144,41 @@ export function NoteWorkspace({
 
       <div className="workspace-scroll">
         <div className={`note-page mode-${mode}`}>
-          {note.hasCover && (
-            <div className="page-cover" aria-label="Page cover">
-              <button onClick={() => onUpdateNote({ ...note, hasCover: false, updatedAt: Date.now() })}><X size={14} />Remove cover</button>
+          {note.pageCover && (
+            <div className="page-cover" data-cover={note.pageCover} aria-label={`Page cover: ${coverLabel ?? 'Custom cover'}`}>
+              <div className="page-cover-actions">
+                <button onClick={() => setAppearancePicker('cover')}><ImagePlus size={14} />Change cover</button>
+                <button onClick={() => selectCover(undefined)}><X size={14} />Remove cover</button>
+              </div>
             </div>
           )}
 
           <div className="document-column">
             {note.pageIcon && (
-              <button className="page-icon" onClick={() => onUpdateNote({ ...note, pageIcon: undefined, updatedAt: Date.now() })} title="Remove icon" aria-label="Remove page icon">
+              <button className="page-icon" onClick={() => setAppearancePicker('icon')} title="Change icon" aria-label={`Change page icon: ${note.pageIcon}`}>
                 {note.pageIcon}
               </button>
             )}
 
             <div className="page-customize-actions">
               {!note.pageIcon && (
-                <button onClick={() => onUpdateNote({ ...note, pageIcon: '🌸', updatedAt: Date.now() })}><SmilePlus size={14} />Add icon</button>
+                <button onClick={() => setAppearancePicker('icon')}><SmilePlus size={14} />Add icon</button>
               )}
-              {!note.hasCover && (
-                <button onClick={() => onUpdateNote({ ...note, hasCover: true, updatedAt: Date.now() })}><ImagePlus size={14} />Add cover</button>
+              {!note.pageCover && (
+                <button onClick={() => setAppearancePicker('cover')}><ImagePlus size={14} />Add cover</button>
               )}
             </div>
+
+            {appearancePicker && (
+              <NoteAppearancePicker
+                kind={appearancePicker}
+                currentIcon={note.pageIcon}
+                currentCover={note.pageCover}
+                onClose={closeAppearancePicker}
+                onSelectIcon={selectIcon}
+                onSelectCover={selectCover}
+              />
+            )}
 
             <textarea
               ref={titleInputRef}
