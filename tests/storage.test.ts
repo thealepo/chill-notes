@@ -10,7 +10,12 @@ import {
   type StoredWorkspace,
 } from '../src/lib/noteSerialization.ts'
 import type { Note } from '../src/types.ts'
-import { classifyStorageUsage, formatStorageSize } from '../src/lib/storageUsage.ts'
+import {
+  checkStoragePersistence,
+  classifyStorageUsage,
+  formatStorageSize,
+  requestStoragePersistence,
+} from '../src/lib/storageUsage.ts'
 
 function note(id: string, updatedAt: number, title = id): Note {
   return {
@@ -158,4 +163,36 @@ test('storage sizes use compact human-readable units', () => {
   assert.equal(formatStorageSize(2 * 1024), '2 KB')
   assert.equal(formatStorageSize(1.5 * 1024 * 1024), '1.5 MB')
   assert.equal(formatStorageSize(2 * 1024 * 1024 * 1024), '2.0 GB')
+})
+
+test('storage persistence reports browser capability and current durability', async () => {
+  assert.equal(await checkStoragePersistence(undefined), 'unsupported')
+  assert.equal(await checkStoragePersistence({
+    persisted: async () => false,
+    persist: async () => true,
+  }), 'available')
+  assert.equal(await checkStoragePersistence({
+    persisted: async () => true,
+    persist: async () => true,
+  }), 'persistent')
+  assert.equal(await checkStoragePersistence({
+    persisted: async () => { throw new Error('blocked') },
+    persist: async () => true,
+  }), 'error')
+})
+
+test('storage persistence requests distinguish grants, denials, and failures', async () => {
+  assert.equal(await requestStoragePersistence(undefined), 'unsupported')
+  assert.equal(await requestStoragePersistence({
+    persisted: async () => false,
+    persist: async () => true,
+  }), 'persistent')
+  assert.equal(await requestStoragePersistence({
+    persisted: async () => false,
+    persist: async () => false,
+  }), 'denied')
+  assert.equal(await requestStoragePersistence({
+    persisted: async () => false,
+    persist: async () => { throw new Error('blocked') },
+  }), 'error')
 })
