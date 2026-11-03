@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Menu } from 'lucide-react'
 import { AppSidebar } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
 import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
+import { useNoteLibrary } from './hooks/useNoteLibrary'
 import { useTheme } from './hooks/useTheme'
 import { usePwa } from './hooks/usePwa'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
@@ -14,15 +15,9 @@ import {
   parseImportedNotes,
   serializeNotesExport,
 } from './lib/noteSerialization'
-import {
-  createBlankNote,
-  duplicateNote,
-  getVisibleNotes,
-  type NoteView,
-  type SortOrder,
-} from './lib/noteCollection'
+import type { NoteView } from './lib/noteCollection'
 import { downloadFile } from './lib/platform'
-import type { EditorMode, Note } from './types'
+import type { EditorMode } from './types'
 
 function autosizeTitle(element: HTMLTextAreaElement | null) {
   if (!element) return
@@ -45,14 +40,31 @@ export default function App() {
     recovery: workspaceRecovery,
     replaceUnsafeWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
-  const notes = workspaceState.notes
-  const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
+  const noteLibrary = useNoteLibrary({ workspace: workspaceState, setWorkspace: setWorkspaceState })
+  const {
+    notes,
+    activeNote,
+    visibleNotes,
+    view,
+    query,
+    favoritesOnly,
+    sortOrder,
+    setQuery,
+    selectNote: selectLibraryNote,
+    showView: showLibraryView,
+    createNote: createLibraryNote,
+    prependNotes,
+    updateNote,
+    toggleActiveFavorite,
+    duplicateActiveNote: duplicateLibraryNote,
+    toggleActiveArchive,
+    deleteActiveNote: deleteLibraryNote,
+    toggleFavoritesOnly,
+    toggleSortOrder,
+  } = noteLibrary
   const [mode, setMode] = useState<EditorMode>(() =>
     new URLSearchParams(window.location.search).get('mode') === 'draw' ? 'draw' : 'type',
   )
-  const [view, setView] = useState<NoteView>('notes')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('updated')
-  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [noteMenuOpen, setNoteMenuOpen] = useState(false)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
@@ -63,7 +75,6 @@ export default function App() {
   const mobileMenuRef = useRef<HTMLButtonElement>(null)
   const sidebarWasOpenRef = useRef(false)
   const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
-  const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [updatingPwa, setUpdatingPwa] = useState(false)
@@ -72,21 +83,6 @@ export default function App() {
   const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
   const previousOnlineRef = useRef(true)
   const pwaReloadRunningRef = useRef(false)
-
-  const setNotes = useCallback((update: SetStateAction<Note[]>) => {
-    setWorkspaceState((current) => ({
-      ...current,
-      notes: typeof update === 'function' ? update(current.notes) : update,
-    }))
-  }, [setWorkspaceState])
-
-  const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
-  const visibleNotes = useMemo(() => getVisibleNotes(notes, {
-    view,
-    query,
-    favoritesOnly,
-    sortOrder,
-  }), [favoritesOnly, notes, query, sortOrder, view])
 
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
@@ -108,10 +104,6 @@ export default function App() {
     previousOnlineRef.current = pwa.online
     setNotice(pwa.online ? 'Back online.' : 'You’re offline — your saved notes are still available.')
   }, [pwa.online])
-
-  useEffect(() => {
-    if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
-  }, [activeId, notes])
 
   useEffect(() => {
     const isMobile = window.matchMedia('(max-width: 700px)').matches
@@ -171,112 +163,56 @@ export default function App() {
     return () => observer.disconnect()
   }, [activeNote?.id, activeNote?.title, mode])
 
-  function updateNote(updated: Note) {
-    setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)))
-  }
-
-  function createNote() {
-    const note = createBlankNote()
+  const createNote = useCallback(() => {
     const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
     if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
-    setNotes((current) => [note, ...current])
-    setActiveId(note.id)
-    setView('notes')
+    createLibraryNote()
     setMode('type')
     setSidebarOpen(false)
     setNoteMenuOpen(false)
     if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
-  }
+  }, [createLibraryNote, sidebarOpen])
 
   function selectNote(id: string) {
     if (sidebarOpen && window.matchMedia('(max-width: 700px)').matches) {
       sidebarFocusIntentRef.current = 'title'
     }
-    setActiveId(id)
+    selectLibraryNote(id)
     setSidebarOpen(false)
     setNoteMenuOpen(false)
   }
 
   function showView(nextView: NoteView) {
-    const nextNote = notes.find((note) => Boolean(note.archived) === (nextView === 'archive'))
-    if (!nextNote && nextView === 'archive') {
+    if (!showLibraryView(nextView)) {
       setNotice('Archive is empty.')
       setSidebarOpen(false)
       return
     }
-    setView(nextView)
-    setQuery('')
     setSettingsOpen(false)
     setWorkspaceMenuOpen(false)
     setSidebarOpen(false)
     setNotice('')
-    if (nextNote) setActiveId(nextNote.id)
-  }
-
-  function toggleFavorite() {
-    if (!activeNote) return
-    updateNote({ ...activeNote, favorite: !activeNote.favorite, updatedAt: Date.now() })
   }
 
   function duplicateActiveNote() {
-    if (!activeNote) return
-    const duplicate = duplicateNote(activeNote)
-    setNotes((current) => [duplicate, ...current])
-    setActiveId(duplicate.id)
+    if (!duplicateLibraryNote()) return
     setNoteMenuOpen(false)
   }
 
   function toggleArchive() {
-    if (!activeNote) return
-    const archived = !activeNote.archived
-    const updated = { ...activeNote, archived, updatedAt: Date.now() }
-    // Prefer the next note the user can actually see in the sidebar.
-    const nextInView = visibleNotes.find((note) => note.id !== activeNote.id)
-      ?? notes.find((note) => note.id !== activeNote.id && Boolean(note.archived) === (view === 'archive'))
-    updateNote(updated)
+    const result = toggleActiveArchive()
+    if (!result) return
     setNoteMenuOpen(false)
-
-    if (!archived) {
-      setView('notes')
+    if (result === 'restored') {
       setNotice('Note restored.')
       return
     }
     setNotice('Note archived.')
-    if (nextInView) {
-      setActiveId(nextInView.id)
-      return
-    }
-    const note = createBlankNote()
-    setNotes((current) => [note, ...current])
-    setActiveId(note.id)
-    setView('notes')
   }
 
   function deleteActiveNote() {
     if (!activeNote || !window.confirm('Delete this note? This cannot be undone.')) return
-    const remaining = notes.filter((note) => note.id !== activeNote.id)
-    let nextNote = visibleNotes.find((note) => note.id !== activeNote.id)
-      ?? remaining.find((note) => Boolean(note.archived) === (view === 'archive'))
-
-    if (!nextNote && view === 'archive') {
-      setView('notes')
-      nextNote = remaining.find((note) => !note.archived)
-    }
-    if (!nextNote) {
-      nextNote = createBlankNote()
-      remaining.unshift(nextNote)
-      setView('notes')
-    }
-
-    const deletedAt = Date.now()
-    setWorkspaceState((current) => ({
-      notes: remaining,
-      tombstones: {
-        ...current.tombstones,
-        [activeNote.id]: Math.max(current.tombstones[activeNote.id] ?? -1, deletedAt),
-      },
-    }))
-    setActiveId(nextNote.id)
+    deleteLibraryNote()
     setNoteMenuOpen(false)
   }
 
@@ -330,7 +266,7 @@ export default function App() {
         return
       }
 
-      setNotes((current) => [...result.notes, ...current])
+      prependNotes(result.notes)
       const noteLabel = result.notes.length === 1 ? 'note' : 'notes'
       const skipped = result.skipped > 0 ? ` Skipped ${result.skipped}.` : ''
       setNotice(`Imported ${result.notes.length} ${noteLabel}.${skipped}`)
@@ -446,18 +382,9 @@ export default function App() {
       }
       if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        const note = createBlankNote()
-        const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
-        if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
-        setNotes((current) => [note, ...current])
-        setActiveId(note.id)
-        setView('notes')
-        setMode('type')
-        setSidebarOpen(false)
-        setNoteMenuOpen(false)
+        createNote()
         setWorkspaceMenuOpen(false)
         setSettingsOpen(false)
-        if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
       }
       if (event.key === 'Escape') {
         setNoteMenuOpen(false)
@@ -469,7 +396,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [setNotes, sidebarOpen])
+  }, [createNote, sidebarOpen])
 
   if (!activeNote) return null
 
@@ -515,8 +442,8 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         onCreateNote={createNote}
         onQueryChange={setQuery}
-        onToggleFavorites={() => setFavoritesOnly((current) => !current)}
-        onToggleSort={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
+        onToggleFavorites={toggleFavoritesOnly}
+        onToggleSort={toggleSortOrder}
         onSelectNote={selectNote}
         onShowView={showView}
         onToggleSettings={() => {
@@ -549,7 +476,7 @@ export default function App() {
         titleInputRef={titleInputRef}
         onModeChange={setMode}
         onToggleFocus={() => setFocusMode((current) => !current)}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={toggleActiveFavorite}
         onToggleNoteMenu={() => {
           setNoteMenuOpen((current) => !current)
           setSettingsOpen(false)
