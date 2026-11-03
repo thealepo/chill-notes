@@ -1,4 +1,5 @@
 import type { BlockKind, Note, NoteBlock } from '../types'
+import { DEFAULT_NOTE_COVER, isNoteCover } from './noteAppearance'
 
 const BLOCK_KINDS = new Set<BlockKind>([
   'text',
@@ -76,6 +77,7 @@ function normalizeImportedNote(value: unknown): Note | null {
   if (value.favorite !== undefined && typeof value.favorite !== 'boolean') return null
   if (value.archived !== undefined && typeof value.archived !== 'boolean') return null
   if (value.pageIcon !== undefined && typeof value.pageIcon !== 'string') return null
+  if (value.pageCover !== undefined && !isNoteCover(value.pageCover)) return null
   if (value.hasCover !== undefined && typeof value.hasCover !== 'boolean') return null
   if (value.drawing !== undefined && typeof value.drawing !== 'string') return null
   if (
@@ -89,6 +91,10 @@ function normalizeImportedNote(value: unknown): Note | null {
 
   if (blocks.length === 0) return null
 
+  const pageCover = isNoteCover(value.pageCover)
+    ? value.pageCover
+    : value.hasCover === true ? DEFAULT_NOTE_COVER : undefined
+
   return {
     id: crypto.randomUUID(),
     title: value.title ?? '',
@@ -97,7 +103,7 @@ function normalizeImportedNote(value: unknown): Note | null {
     blocks,
     ...(value.archived !== undefined ? { archived: value.archived } : {}),
     ...(value.pageIcon !== undefined ? { pageIcon: value.pageIcon } : {}),
-    ...(value.hasCover !== undefined ? { hasCover: value.hasCover } : {}),
+    ...(pageCover ? { pageCover } : {}),
     ...(value.drawing !== undefined ? { drawing: value.drawing } : {}),
   }
 }
@@ -139,6 +145,10 @@ export function normalizeStoredNotes(value: unknown): Note[] {
         .filter((block): block is NoteBlock => block !== null)
       if (blocks.length === 0) return null
 
+      const pageCover = isNoteCover(value.pageCover)
+        ? value.pageCover
+        : value.hasCover === true ? DEFAULT_NOTE_COVER : undefined
+
       return {
         id: value.id,
         title: typeof value.title === 'string' ? value.title : '',
@@ -148,7 +158,7 @@ export function normalizeStoredNotes(value: unknown): Note[] {
         favorite: value.favorite === true,
         blocks,
         ...(typeof value.pageIcon === 'string' ? { pageIcon: value.pageIcon } : {}),
-        ...(typeof value.hasCover === 'boolean' ? { hasCover: value.hasCover } : {}),
+        ...(pageCover ? { pageCover } : {}),
         ...(typeof value.archived === 'boolean' ? { archived: value.archived } : {}),
         ...(typeof value.drawing === 'string' ? { drawing: value.drawing } : {}),
       }

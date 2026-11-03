@@ -44,6 +44,18 @@ test('stored notes discard malformed optional fields without discarding valid co
   assert.deepEqual(parseDrawingScene(42).elements, [])
 })
 
+test('stored notes preserve named covers and migrate the legacy cover flag', () => {
+  const [named, legacy] = normalizeStoredNotes([
+    { ...note('named', 2), pageIcon: '🌊', pageCover: 'ocean' },
+    { ...note('legacy-cover', 1), hasCover: true },
+  ])
+
+  assert.equal(named.pageIcon, '🌊')
+  assert.equal(named.pageCover, 'ocean')
+  assert.equal(legacy.pageCover, 'rose')
+  assert.equal('hasCover' in legacy, false)
+})
+
 test('legacy note arrays migrate into the versioned workspace', () => {
   const workspace = normalizeStoredWorkspace([note('legacy', 10)])
 

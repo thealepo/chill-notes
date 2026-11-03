@@ -33,7 +33,7 @@ test('JSON backup round-trips drawings and presentation metadata with fresh IDs'
     favorite: true,
     archived: true,
     pageIcon: '🌸',
-    hasCover: true,
+    pageCover: 'lavender',
     drawing,
     blocks: [
       { id: 'heading', kind: 'heading2', content: 'Preserved content' },
@@ -60,6 +60,20 @@ test('JSON backup round-trips drawings and presentation metadata with fresh IDs'
     })),
   }, original)
   assert.equal(parseDrawingScene(restored.drawing).elements[0]?.type, 'rectangle')
+})
+
+test('legacy boolean covers import as the original rose cover', () => {
+  const result = parseImportedNotes(JSON.stringify([{
+    title: 'Legacy presentation',
+    pageIcon: '🌿',
+    hasCover: true,
+    blocks: [{ kind: 'text', content: 'Still portable' }],
+  }]))
+
+  assert.equal(result.skipped, 0)
+  assert.equal(result.notes[0].pageIcon, '🌿')
+  assert.equal(result.notes[0].pageCover, 'rose')
+  assert.equal('hasCover' in result.notes[0], false)
 })
 
 test('partial imports retain valid content while reporting malformed notes', () => {
