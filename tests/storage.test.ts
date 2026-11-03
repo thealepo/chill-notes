@@ -32,6 +32,7 @@ test('stored notes discard malformed optional fields without discarding valid co
     ...note('safe', 1),
     drawing: 42,
     pageIcon: { emoji: '🌸' },
+    pageCover: 'glitch',
     hasCover: 'yes',
     archived: 1,
   }])
@@ -39,9 +40,22 @@ test('stored notes discard malformed optional fields without discarding valid co
   assert.equal(normalized.id, 'safe')
   assert.equal(normalized.drawing, undefined)
   assert.equal(normalized.pageIcon, undefined)
-  assert.equal(normalized.hasCover, undefined)
+  assert.equal(normalized.pageCover, undefined)
+  assert.equal('hasCover' in normalized, false)
   assert.equal(normalized.archived, undefined)
   assert.deepEqual(parseDrawingScene(42).elements, [])
+})
+
+test('stored notes preserve named covers and migrate the legacy cover flag', () => {
+  const [named, legacy] = normalizeStoredNotes([
+    { ...note('named', 2), pageIcon: '🌊', pageCover: 'ocean' },
+    { ...note('legacy-cover', 1), hasCover: true },
+  ])
+
+  assert.equal(named.pageIcon, '🌊')
+  assert.equal(named.pageCover, 'ocean')
+  assert.equal(legacy.pageCover, 'rose')
+  assert.equal('hasCover' in legacy, false)
 })
 
 test('legacy note arrays migrate into the versioned workspace', () => {

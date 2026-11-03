@@ -464,6 +464,7 @@ test.describe('coarse touch mobile PWA', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
     await page.getByRole('button', { name: 'Add cover' }).tap()
+    await page.getByRole('button', { name: 'Quiet ocean' }).tap()
     await page.setViewportSize({ width: 915, height: 412 })
     await session.send('Emulation.setSafeAreaInsetsOverride', {
       insets: { top: 0, right: 47, bottom: 8, left: 34 },

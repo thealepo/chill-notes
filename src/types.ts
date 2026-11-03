@@ -18,6 +18,16 @@ export interface NoteBlock {
   checked?: boolean
 }
 
+export type NoteCover =
+  | 'rose'
+  | 'peach'
+  | 'sunset'
+  | 'lavender'
+  | 'ocean'
+  | 'meadow'
+  | 'sand'
+  | 'midnight'
+
 export interface Note {
   id: string
   title: string
@@ -25,7 +35,7 @@ export interface Note {
   favorite: boolean
   blocks: NoteBlock[]
   pageIcon?: string
-  hasCover?: boolean
+  pageCover?: NoteCover
   archived?: boolean
   drawing?: string
 }
