@@ -129,9 +129,22 @@ test('chooses and persists note icons and covers', async ({ page }) => {
   await expect(coverPicker.locator('.cover-choice')).toHaveCount(8)
   await coverPicker.getByRole('button', { name: 'Quiet ocean' }).click()
 
-  await expect(page.getByRole('button', { name: 'Change page icon: 🌊' })).toBeVisible()
+  const pageIcon = page.getByRole('button', { name: 'Change page icon: 🌊' })
+  await expect(pageIcon).toBeVisible()
   await expect(page.locator('.page-cover')).toHaveAttribute('data-cover', 'ocean')
   await expect(page.locator('.note-icon').first()).toHaveText('🌊')
+  await page.mouse.move(0, 0)
+  expect(await pageIcon.evaluate((icon) => {
+    const bounds = icon.getBoundingClientRect()
+    const topmost = document.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    )
+    return {
+      zIndex: getComputedStyle(icon).zIndex,
+      receivesPointer: topmost === icon || icon.contains(topmost),
+    }
+  })).toEqual({ zIndex: '1', receivesPointer: true })
   await expect.poll(async () => {
     const record = await readIndexedWorkspaceRecord(page, 'current')
     if (typeof record !== 'string') return null
