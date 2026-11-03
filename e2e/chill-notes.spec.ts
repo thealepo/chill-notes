@@ -100,6 +100,24 @@ test('edits blocks with Markdown and slash commands, then persists them', async 
   await expect(page.getByRole('button', { name: 'Mark incomplete' })).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('makes LaTeX source secondary to a full-size display equation', async ({ page }) => {
+  const source = page.getByRole('textbox', { name: 'Text block' }).first()
+  await source.fill(String.raw`$$\frac{x^2 + y^2}{2} = z$$`)
+
+  const block = source.locator('..').locator('..')
+  const preview = block.getByLabel('Rendered equation preview')
+  await expect(source).toHaveClass(/math-source/)
+  await expect(source).toHaveValue(String.raw`$$\frac{x^2 + y^2}{2} = z$$`)
+  await expect(preview).toHaveClass(/has-display-math/)
+  await expect(preview.locator('.katex-display')).toBeVisible()
+
+  const sourceSize = await source.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize))
+  const resultSize = await preview.locator('.katex').evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).fontSize),
+  )
+  expect(resultSize).toBeGreaterThan(sourceSize)
+})
+
 test('creates a shape with a pointer gesture and supports undo and redo', async ({ page }) => {
   await openDrawing(page)
   await page.getByRole('button', { name: 'Rectangle (R)' }).click()

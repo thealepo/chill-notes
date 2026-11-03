@@ -15,6 +15,7 @@ import {
   placeholderForBlock,
   structuralBlockKinds,
 } from './noteEditorConfig'
+import { hasInlineMath } from '../lib/mathContent'
 import type { BlockKind, Note, NoteBlock } from '../types'
 
 interface NoteEditorProps {
@@ -368,12 +369,13 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
         {note.blocks.map((block, blockIndex) => {
           const slashOpen = isSlashOpen(block)
           const menuOpen = slashOpen || insertMenuBlock === block.id
+          const hasMathPreview = block.kind === 'math' || hasInlineMath(block.content)
           const query = slashOpen ? block.content.slice(1) : ''
           const filteredCommands = blockCommands.filter((command) => commandMatches(command, query))
           const dropClass = dropTarget?.id === block.id && draggingId !== block.id ? `drop-${dropTarget.position}` : ''
           return (
             <div
-              className={`editor-block kind-${block.kind} ${dropClass} ${draggingId === block.id ? 'is-dragging' : ''}`}
+              className={`editor-block kind-${block.kind} ${hasMathPreview ? 'has-math-preview' : ''} ${dropClass} ${draggingId === block.id ? 'is-dragging' : ''}`}
               key={block.id}
               onDragOver={(event) => {
                 if (!draggingId) return
@@ -445,7 +447,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
                   onKeyDown={(event) => handleKeyDown(event, block, blockIndex)}
                   placeholder={placeholderForBlock(block.kind, focusedBlock === block.id, note.blocks.length === 1)}
                   aria-label={`${blockLabels[block.kind]} block`}
-                  className={`${block.checked ? 'completed' : ''} ${block.kind === 'divider' ? 'divider-input' : ''}`}
+                  className={`${block.checked ? 'completed' : ''} ${block.kind === 'divider' ? 'divider-input' : ''} ${hasMathPreview ? 'math-source' : ''}`}
                 />
 
                 {block.kind === 'math' && <div className="math-preview"><MathPreview expression={block.content} /></div>}

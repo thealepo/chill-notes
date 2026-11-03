@@ -2775,3 +2775,69 @@ body,
     bottom: calc(335px + var(--safe-bottom));
   }
 }
+
+/* Keep LaTeX editable while making the rendered equation the visual focus. */
+.notion-editor .editor-block.has-math-preview .block-content > textarea.math-source {
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  color: var(--accent-text);
+  font: 500 12.5px/1.55 "SFMono-Regular", Consolas, monospace;
+  background: var(--accent-subtle);
+}
+
+.notion-editor .kind-math.has-math-preview .block-content > textarea.math-source {
+  padding-left: 32px;
+}
+
+.notion-editor .math-preview,
+.notion-editor .inline-math-preview {
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.notion-editor .math-preview,
+.notion-editor .inline-math-preview.has-display-math {
+  min-height: 76px;
+  padding: 18px 16px;
+  margin: 5px 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-inset);
+}
+
+.notion-editor .math-rendered-output {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-size: 1.12em;
+  scrollbar-width: thin;
+}
+
+.notion-editor .math-rendered-output .katex-display {
+  margin: 0;
+  padding: 3px 0;
+}
+
+.notion-editor .inline-math-preview:not(.has-display-math) {
+  padding: 7px 2px;
+  margin: 2px 0 6px;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  /* Sixteen-pixel inputs avoid automatic zoom in mobile Safari. */
+  .notion-editor .editor-block.has-math-preview .block-content > textarea.math-source {
+    font-size: 16px;
+  }
+
+  .notion-editor .math-preview,
+  .notion-editor .inline-math-preview.has-display-math {
+    min-height: 68px;
+    padding: 14px 10px;
+  }
+}
