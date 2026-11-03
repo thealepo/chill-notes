@@ -276,6 +276,11 @@ export function parseImportedNotes(source: string): ImportedNotesResult {
   return { notes, skipped: parsed.length - notes.length }
 }
 
+/** Produces the portable JSON array accepted by parseImportedNotes. */
+export function serializeNotesExport(notes: readonly Note[]): string {
+  return JSON.stringify(notes, null, 2)
+}
+
 function isListBlock(kind: BlockKind): boolean {
   return kind === 'bullet' || kind === 'numbered' || kind === 'checklist'
 }
