@@ -1947,6 +1947,16 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.storage-summary .storage-persistence-status {
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.workspace-menu button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .storage-summary.is-warning,
 .storage-summary.is-critical {
   color: var(--danger);
