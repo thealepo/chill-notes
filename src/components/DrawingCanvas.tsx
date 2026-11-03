@@ -39,6 +39,15 @@ import {
   type ViewportGestureSnapshot,
 } from '../lib/drawingViewportGesture'
 import {
+  DEFAULT_DRAWING_VIEWPORT,
+  MAX_DRAWING_ZOOM,
+  MIN_DRAWING_ZOOM,
+  clampDrawingZoom,
+  fitDrawingViewport,
+  panDrawingViewport,
+  zoomDrawingViewport,
+} from '../lib/drawingViewport'
+import {
   paintDrawingScene,
   type DrawingDraft,
   type DrawingViewport,
@@ -73,15 +82,7 @@ interface TextEditingState {
   before: DrawingScene
 }
 
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 3
-const DEFAULT_VIEWPORT: DrawingViewport = { x: 48, y: 42, zoom: 1 }
-
 const stickyColors = ['#f7d9a7', '#f5cbd5', '#d8d2ef', '#cfe5d5']
-
-function clampZoom(value: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
-}
 
 function cloneScene(scene: DrawingScene): DrawingScene {
   return structuredClone(scene)
@@ -105,7 +106,7 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const [tool, setTool] = useState<DrawingTool>('select')
   const [color, setColor] = useState(drawingColors[0].value)
   const [size, setSize] = useState(4)
-  const [viewport, setViewport] = useState<DrawingViewport>(DEFAULT_VIEWPORT)
+  const [viewport, setViewport] = useState<DrawingViewport>(DEFAULT_DRAWING_VIEWPORT)
   const viewportRef = useRef(viewport)
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({ width: 1, height: 1, ratio: 1 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -262,10 +263,10 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       const shortcut = drawingTools.find((item) => item.shortcut.toLowerCase() === event.key.toLowerCase())
       if (shortcut && !event.metaKey && !event.ctrlKey && !event.altKey) setTool(shortcut.tool)
       if ((event.key === '+' || event.key === '=') && !event.metaKey && !event.ctrlKey) {
-        setLiveViewport({ ...viewportRef.current, zoom: clampZoom(viewportRef.current.zoom * 1.15) })
+        setLiveViewport({ ...viewportRef.current, zoom: clampDrawingZoom(viewportRef.current.zoom * 1.15) })
       }
       if (event.key === '-' && !event.metaKey && !event.ctrlKey) {
-        setLiveViewport({ ...viewportRef.current, zoom: clampZoom(viewportRef.current.zoom / 1.15) })
+        setLiveViewport({ ...viewportRef.current, zoom: clampDrawingZoom(viewportRef.current.zoom / 1.15) })
       }
     }
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -586,7 +587,13 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
       const second = activeTouchPointsRef.current.get(gesture.pointerIds[1])
       if (!first || !second) return
       event.preventDefault()
-      setLiveViewport(updateViewportGesture(gesture.gesture, first, second, MIN_ZOOM, MAX_ZOOM))
+      setLiveViewport(updateViewportGesture(
+        gesture.gesture,
+        first,
+        second,
+        MIN_DRAWING_ZOOM,
+        MAX_DRAWING_ZOOM,
+      ))
       return
     }
     if (gesture.pointerId !== event.pointerId) return
@@ -730,12 +737,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     const view = viewportRef.current
     if (event.ctrlKey || event.metaKey) {
       const screen = screenPoint(event.clientX, event.clientY)
-      const worldX = (screen.x - view.x) / view.zoom
-      const worldY = (screen.y - view.y) / view.zoom
-      const zoom = clampZoom(view.zoom * Math.exp(-event.deltaY * 0.003))
-      setLiveViewport({ x: screen.x - worldX * zoom, y: screen.y - worldY * zoom, zoom })
+      setLiveViewport(zoomDrawingViewport(view, screen, Math.exp(-event.deltaY * 0.003)))
     } else {
-      setLiveViewport({ ...view, x: view.x - event.deltaX, y: view.y - event.deltaY })
+      setLiveViewport(panDrawingViewport(view, event.deltaX, event.deltaY))
     }
   }
 
@@ -743,29 +747,11 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     const view = viewportRef.current
     const centerX = canvasSize.width / 2
     const centerY = canvasSize.height / 2
-    const worldX = (centerX - view.x) / view.zoom
-    const worldY = (centerY - view.y) / view.zoom
-    const zoom = clampZoom(view.zoom * factor)
-    setLiveViewport({ x: centerX - worldX * zoom, y: centerY - worldY * zoom, zoom })
+    setLiveViewport(zoomDrawingViewport(view, { x: centerX, y: centerY }, factor))
   }
 
   function fitToContent() {
-    const bounds = sceneContentBounds(sceneRef.current)
-    if (!bounds) {
-      setLiveViewport(DEFAULT_VIEWPORT)
-      return
-    }
-    const padding = 64
-    const zoom = clampZoom(Math.min(
-      (canvasSize.width - padding * 2) / bounds.width,
-      (canvasSize.height - padding * 2) / bounds.height,
-      1.5,
-    ))
-    setLiveViewport({
-      x: (canvasSize.width - bounds.width * zoom) / 2 - bounds.x * zoom,
-      y: (canvasSize.height - bounds.height * zoom) / 2 - bounds.y * zoom,
-      zoom,
-    })
+    setLiveViewport(fitDrawingViewport(sceneContentBounds(sceneRef.current), canvasSize))
   }
 
   function chooseColor(nextColor: string) {
