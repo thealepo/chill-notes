@@ -12,6 +12,7 @@ import {
   markdownFilename,
   noteToMarkdown,
   parseImportedNotes,
+  serializeNotesExport,
 } from './lib/noteSerialization'
 import { downloadFile } from './lib/platform'
 import type { EditorMode, Note } from './types'
@@ -295,7 +296,7 @@ export default function App() {
   }
 
   function exportNotes() {
-    const file = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' })
+    const file = new Blob([serializeNotesExport(notes)], { type: 'application/json' })
     downloadFile(file, `chill-notes-${new Date().toISOString().slice(0, 10)}.json`)
     setWorkspaceMenuOpen(false)
     setNotice(`Exported ${notes.length} ${notes.length === 1 ? 'note' : 'notes'} as JSON.`)
