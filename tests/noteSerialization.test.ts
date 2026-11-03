@@ -76,6 +76,36 @@ test('legacy boolean covers import as the original rose cover', () => {
   assert.equal('hasCover' in result.notes[0], false)
 })
 
+test('imports normalize custom page icons without discarding valid notes', () => {
+  const result = parseImportedNotes(JSON.stringify([
+    {
+      title: 'Trimmed icon',
+      pageIcon: '  🌿  ',
+      blocks: [{ kind: 'text', content: 'Keep the icon' }],
+    },
+    {
+      title: 'Empty icon',
+      pageIcon: ' \n\t ',
+      blocks: [{ kind: 'text', content: 'Keep the note' }],
+    },
+    {
+      title: 'Capped icon',
+      pageIcon: 'abcdefghijklmnop-extra',
+      blocks: [{ kind: 'text', content: 'Keep the prefix' }],
+    },
+  ]))
+
+  assert.equal(result.skipped, 0)
+  assert.deepEqual(
+    result.notes.map(({ title, pageIcon }) => ({ title, pageIcon })),
+    [
+      { title: 'Trimmed icon', pageIcon: '🌿' },
+      { title: 'Empty icon', pageIcon: undefined },
+      { title: 'Capped icon', pageIcon: 'abcdefghijklmnop' },
+    ],
+  )
+})
+
 test('partial imports retain valid content while reporting malformed notes', () => {
   const result = parseImportedNotes(JSON.stringify([
     {

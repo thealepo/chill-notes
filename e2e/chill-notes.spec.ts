@@ -157,9 +157,14 @@ test('chooses and persists note icons and covers', async ({ page }) => {
   await expect(page.locator('.page-cover')).toHaveAttribute('data-cover', 'ocean')
 
   await page.getByRole('button', { name: 'Change page icon: 🌊' }).click()
-  await page.getByLabel('Custom emoji or symbol').fill('🐚')
+  await page.getByLabel('Custom emoji or symbol').fill('  🐚  ')
   await page.getByRole('button', { name: 'Use icon' }).click()
   await expect(page.getByRole('button', { name: 'Change page icon: 🐚' })).toBeVisible()
+  await expect.poll(async () => {
+    const record = await readIndexedWorkspaceRecord(page, 'current')
+    if (typeof record !== 'string') return null
+    return JSON.parse(record).notes[0]?.pageIcon
+  }).toBe('🐚')
 
   await page.getByRole('button', { name: 'Change cover' }).click()
   await page.getByRole('button', { name: 'Golden sunset' }).click()

@@ -58,6 +58,18 @@ test('stored notes preserve named covers and migrate the legacy cover flag', () 
   assert.equal('hasCover' in legacy, false)
 })
 
+test('stored notes normalize custom page icons during hydration', () => {
+  const [trimmed, empty, capped] = normalizeStoredNotes([
+    { ...note('trimmed-icon', 3), pageIcon: '  🌊  ' },
+    { ...note('empty-icon', 2), pageIcon: ' \n\t ' },
+    { ...note('capped-icon', 1), pageIcon: 'abcdefghijklmnop-extra' },
+  ])
+
+  assert.equal(trimmed.pageIcon, '🌊')
+  assert.equal(empty.pageIcon, undefined)
+  assert.equal(capped.pageIcon, 'abcdefghijklmnop')
+})
+
 test('legacy note arrays migrate into the versioned workspace', () => {
   const workspace = normalizeStoredWorkspace([note('legacy', 10)])
 
