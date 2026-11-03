@@ -5,9 +5,9 @@ import { NoteWorkspace } from './components/NoteWorkspace'
 import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
+import { useAppPwa } from './hooks/useAppPwa'
 import { useNoteLibrary } from './hooks/useNoteLibrary'
 import { useTheme } from './hooks/useTheme'
-import { usePwa } from './hooks/usePwa'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
 import type { NoteView } from './lib/noteCollection'
@@ -18,8 +18,6 @@ function autosizeTitle(element: HTMLTextAreaElement | null) {
   element.style.height = '0px'
   element.style.height = `${element.scrollHeight}px`
 }
-
-const UPDATE_SAVE_TIMEOUT = 10_000
 
 export default function App() {
   const {
@@ -70,12 +68,8 @@ export default function App() {
   const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
-  const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
-  const pwa = usePwa()
-  const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
-  const previousOnlineRef = useRef(true)
-  const pwaReloadRunningRef = useRef(false)
+  const appPwa = useAppPwa({ storageStatus, flushWorkspace, notify: setNotice })
   const workspaceActions = useWorkspaceActions({
     notes,
     activeNote,
@@ -89,23 +83,6 @@ export default function App() {
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
   }, [syncedAt])
-
-  useEffect(() => {
-    if (!offlineReady) return
-    setNotice('Chill Notes is ready to use offline.')
-    dismissOfflineReady()
-  }, [dismissOfflineReady, offlineReady])
-
-  useEffect(() => {
-    if (!pwa.registrationFailed) return
-    setNotice('Offline setup is unavailable right now. Your notes still save on this device.')
-  }, [pwa.registrationFailed])
-
-  useEffect(() => {
-    if (previousOnlineRef.current === pwa.online) return
-    previousOnlineRef.current = pwa.online
-    setNotice(pwa.online ? 'Back online.' : 'You’re offline — your saved notes are still available.')
-  }, [pwa.online])
 
   useEffect(() => {
     const isMobile = window.matchMedia('(max-width: 700px)').matches
@@ -235,74 +212,13 @@ export default function App() {
 
   async function installPwa() {
     setWorkspaceMenuOpen(false)
-    try {
-      const result = await pwa.promptInstall()
-      if (result === 'accepted') setNotice('Chill Notes is being installed.')
-      if (result === 'dismissed') setNotice('Installation cancelled. You can try again later.')
-      if (result === 'manual') setNotice('In Safari, tap Share, then “Add to Home Screen.”')
-      if (result === 'unavailable') setNotice('Install from your browser’s app menu when available.')
-    } catch {
-      setNotice('Could not open the install prompt. Try your browser’s app menu.')
-    }
+    await appPwa.install()
   }
 
   async function protectLocalStorage() {
     await workspaceActions.protectLocalStorage()
     setWorkspaceMenuOpen(false)
   }
-
-  const saveBeforePwaReload = useCallback(async () => {
-    const savedStatus = await Promise.race([
-      flushWorkspace(),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), UPDATE_SAVE_TIMEOUT)),
-    ])
-    if (!savedStatus) {
-      setNotice('Update paused because saving is taking longer than expected. Try again in a moment.')
-      return false
-    }
-    if (savedStatus.phase === 'error' || savedStatus.phase === 'recovery') {
-      setNotice(savedStatus.phase === 'recovery'
-        ? 'Update paused while saved data needs recovery. Download or replace it first.'
-        : 'Update paused because your latest changes are not saved. Download a backup first.')
-      return false
-    }
-    return true
-  }, [flushWorkspace])
-
-  async function updatePwa() {
-    setUpdatingPwa(true)
-    try {
-      if (storageStatus.phase === 'loading' || storageStatus.phase === 'saving') {
-        setNotice('Finishing saving before the update…')
-      }
-      if (!await saveBeforePwaReload()) {
-        setUpdatingPwa(false)
-        return
-      }
-      if (pwaReloadNeeded) {
-        reloadPwaPage()
-        return
-      }
-      await pwa.updateServiceWorker(true)
-    } catch {
-      setUpdatingPwa(false)
-      setNotice('Could not update right now. Your current version is still available.')
-    }
-  }
-
-  useEffect(() => {
-    if (!pwaReloadNeeded || pwaReloadRunningRef.current) return
-    pwaReloadRunningRef.current = true
-    setUpdatingPwa(true)
-    void saveBeforePwaReload().then((canReload) => {
-      if (canReload) {
-        reloadPwaPage()
-        return
-      }
-      pwaReloadRunningRef.current = false
-      setUpdatingPwa(false)
-    })
-  }, [pwaReloadNeeded, reloadPwaPage, saveBeforePwaReload])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -357,11 +273,11 @@ export default function App() {
         onDownloadRecovery={workspaceActions.downloadWorkspaceRecovery}
         onReplaceWorkspace={workspaceActions.replaceRecoveredWorkspace}
       />
-      {pwa.needRefresh && (
+      {appPwa.needRefresh && (
         <PwaUpdateNotice
-          updating={updatingPwa}
-          onUpdate={updatePwa}
-          onDismiss={pwa.dismissUpdate}
+          updating={appPwa.updating}
+          onUpdate={appPwa.update}
+          onDismiss={appPwa.dismissUpdate}
         />
       )}
 
@@ -378,7 +294,7 @@ export default function App() {
         storageStatus={storageStatus}
         storageUsage={storageUsage}
         storagePersistence={storagePersistence}
-        pwaInstallMode={pwa.installMode}
+        pwaInstallMode={appPwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
         importInputRef={workspaceActions.importInputRef}
