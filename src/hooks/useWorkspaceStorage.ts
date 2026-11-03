@@ -12,7 +12,13 @@ import {
   serializeStoredWorkspace,
   type StoredWorkspace,
 } from '../lib/noteSerialization'
-import type { StorageUsage } from '../lib/storageUsage'
+import {
+  checkStoragePersistence,
+  requestStoragePersistence,
+  type StoragePersistenceCheck,
+  type StoragePersistenceRequest,
+  type StorageUsage,
+} from '../lib/storageUsage'
 import {
   announceWorkspaceChange,
   estimateStorageUsage,
@@ -29,6 +35,7 @@ import {
 
 export type WorkspaceSavePhase = 'loading' | 'saving' | 'saved' | 'warning' | 'error' | 'recovery'
 export type WorkspaceStorageBackend = 'indexeddb' | 'localstorage'
+export type WorkspaceStoragePersistence = StoragePersistenceCheck | StoragePersistenceRequest | 'checking' | 'requesting'
 
 export interface WorkspaceStorageStatus {
   phase: WorkspaceSavePhase
@@ -48,8 +55,10 @@ interface UseWorkspaceStorageResult {
   setWorkspace: Dispatch<SetStateAction<StoredWorkspace>>
   status: WorkspaceStorageStatus
   usage: StorageUsage | null
+  persistence: WorkspaceStoragePersistence
   syncedAt: number | null
   flush: () => Promise<WorkspaceStorageStatus>
+  requestPersistence: () => Promise<StoragePersistenceRequest>
   recovery: WorkspaceRecovery | null
   replaceUnsafeWorkspace: () => void
 }
@@ -77,6 +86,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   ))
   const [status, setStatus] = useState<WorkspaceStorageStatus>({ phase: 'loading', backend: null })
   const [usage, setUsage] = useState<StorageUsage | null>(null)
+  const [persistence, setPersistence] = useState<WorkspaceStoragePersistence>('checking')
   const [syncedAt, setSyncedAt] = useState<number | null>(null)
   const [recovery, setRecovery] = useState<WorkspaceRecovery | null>(null)
   const hydratedRef = useRef(false)
@@ -99,6 +109,13 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const refreshUsage = useCallback(async () => {
     const nextUsage = await estimateStorageUsage()
     if (mountedRef.current) setUsage(nextUsage)
+  }, [])
+
+  const requestPersistence = useCallback(async () => {
+    setPersistence('requesting')
+    const result = await requestStoragePersistence()
+    if (mountedRef.current) setPersistence(result)
+    return result
   }, [])
 
   const blockPersistenceForRecovery = useCallback((result: IndexedWorkspaceRead) => {
@@ -232,6 +249,16 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   }, [blockPersistenceForRecovery, persist])
 
   useEffect(() => {
+    let cancelled = false
+    void checkStoragePersistence().then((result) => {
+      if (!cancelled) setPersistence(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!hydratedRef.current) return
     persist(workspace)
   }, [persist, workspace])
@@ -308,8 +335,10 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     setWorkspace,
     status,
     usage,
+    persistence,
     syncedAt,
     flush,
+    requestPersistence,
     recovery,
     replaceUnsafeWorkspace,
   }
