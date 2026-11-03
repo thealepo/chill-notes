@@ -54,7 +54,7 @@ npm ci
 npm run dev
 ```
 
-Run `npx playwright install chromium` once to install the browser used by the interaction tests. Then run `npm run check` to execute the same lint, Node tests, production build, and Playwright browser tests as CI. Use `npm run test:e2e` to run only the production build and browser tests.
+Run `npx playwright install chromium` once to install the browser used by the interaction tests. Then run `npm run check` to execute the same production dependency audit, lint, Node tests, production build, and Playwright browser tests as CI. Use `npm run audit:prod` to run only the shipping-dependency audit, or `npm run test:e2e` to run only the production build and browser tests. See [Dependency security](docs/dependency-security.md) for the current development-tooling audit triage.
 
 Launcher PNGs are generated reproducibly from the SVG sources in `public/icons/`. After changing that artwork, run `npm run generate:icons` and commit the refreshed assets.
 

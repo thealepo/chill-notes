@@ -1,16 +1,11 @@
-import katex from 'katex'
 import { useMemo } from 'react'
+import { renderMathExpression } from '../lib/mathRendering'
 
 const INLINE_MATH_PATTERN = /(\$\$[^$]+\$\$|\$(?!\s)[^$\n]*?[^\s$]\$(?!\d))/g
 
 export function MathPreview({ expression, displayMode = true }: { expression: string; displayMode?: boolean }) {
   const rendered = useMemo(() => {
-    if (!expression.trim()) return ''
-    try {
-      return katex.renderToString(expression, { displayMode, throwOnError: false, strict: false })
-    } catch {
-      return ''
-    }
+    return renderMathExpression(expression, displayMode)
   }, [expression, displayMode])
 
   if (!rendered) return <span className="math-placeholder">Type a LaTeX expression…</span>
