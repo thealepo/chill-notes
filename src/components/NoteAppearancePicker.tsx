@@ -1,6 +1,11 @@
 import { Trash2, X } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent } from 'react'
-import { NOTE_COVER_OPTIONS, NOTE_ICON_OPTIONS } from '../lib/noteAppearance'
+import {
+  MAX_NOTE_ICON_LENGTH,
+  normalizeNoteIcon,
+  NOTE_COVER_OPTIONS,
+  NOTE_ICON_OPTIONS,
+} from '../lib/noteAppearance'
 import type { NoteCover } from '../types'
 
 interface NoteAppearancePickerProps {
@@ -35,7 +40,7 @@ export function NoteAppearancePicker({
 
   function submitCustomIcon(event: FormEvent) {
     event.preventDefault()
-    const nextIcon = customIcon.trim()
+    const nextIcon = normalizeNoteIcon(customIcon)
     if (!nextIcon) return
     onSelectIcon(nextIcon)
   }
@@ -78,11 +83,11 @@ export function NoteAppearancePicker({
                 id={customIconId}
                 value={customIcon}
                 onChange={(event) => setCustomIcon(event.target.value)}
-                maxLength={16}
+                maxLength={MAX_NOTE_ICON_LENGTH}
                 placeholder="Paste an emoji"
                 autoComplete="off"
               />
-              <button type="submit" disabled={!customIcon.trim()}>Use icon</button>
+              <button type="submit" disabled={!normalizeNoteIcon(customIcon)}>Use icon</button>
             </div>
           </form>
           {currentIcon && (

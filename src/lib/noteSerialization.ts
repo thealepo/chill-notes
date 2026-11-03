@@ -1,5 +1,5 @@
 import type { BlockKind, Note, NoteBlock } from '../types'
-import { DEFAULT_NOTE_COVER, isNoteCover } from './noteAppearance.ts'
+import { DEFAULT_NOTE_COVER, isNoteCover, normalizeNoteIcon } from './noteAppearance.ts'
 
 const BLOCK_KINDS = new Set<BlockKind>([
   'text',
@@ -94,6 +94,7 @@ function normalizeImportedNote(value: unknown): Note | null {
   const pageCover = isNoteCover(value.pageCover)
     ? value.pageCover
     : value.hasCover === true ? DEFAULT_NOTE_COVER : undefined
+  const pageIcon = normalizeNoteIcon(value.pageIcon)
 
   return {
     id: crypto.randomUUID(),
@@ -102,7 +103,7 @@ function normalizeImportedNote(value: unknown): Note | null {
     updatedAt: value.updatedAt ?? Date.now(),
     blocks,
     ...(value.archived !== undefined ? { archived: value.archived } : {}),
-    ...(value.pageIcon !== undefined ? { pageIcon: value.pageIcon } : {}),
+    ...(pageIcon ? { pageIcon } : {}),
     ...(pageCover ? { pageCover } : {}),
     ...(value.drawing !== undefined ? { drawing: value.drawing } : {}),
   }
@@ -148,6 +149,7 @@ export function normalizeStoredNotes(value: unknown): Note[] {
       const pageCover = isNoteCover(value.pageCover)
         ? value.pageCover
         : value.hasCover === true ? DEFAULT_NOTE_COVER : undefined
+      const pageIcon = normalizeNoteIcon(value.pageIcon)
 
       return {
         id: value.id,
@@ -157,7 +159,7 @@ export function normalizeStoredNotes(value: unknown): Note[] {
           : Date.now(),
         favorite: value.favorite === true,
         blocks,
-        ...(typeof value.pageIcon === 'string' ? { pageIcon: value.pageIcon } : {}),
+        ...(pageIcon ? { pageIcon } : {}),
         ...(pageCover ? { pageCover } : {}),
         ...(typeof value.archived === 'boolean' ? { archived: value.archived } : {}),
         ...(typeof value.drawing === 'string' ? { drawing: value.drawing } : {}),
