@@ -174,6 +174,131 @@ test('downloads Markdown and PNG exports with safe filenames', async ({ page }) 
   await expect(page.locator('.drawing-tip')).toContainText('Drawing exported as PNG')
 })
 
+test('round-trips a JSON backup with drawings, favorites, and archived notes', async ({ page }) => {
+  const drawing = JSON.stringify({
+    type: 'chill-drawing',
+    version: 1,
+    paper: 'lined',
+    elements: [{
+      id: 'portable-shape',
+      type: 'ellipse',
+      x: 20,
+      y: 30,
+      width: 160,
+      height: 80,
+      strokeColor: '#493d40',
+      strokeWidth: 3,
+      opacity: 1,
+    }],
+  })
+  await writeIndexedWorkspaceRecord(page, JSON.stringify({
+    type: 'chill-notes-workspace',
+    version: 1,
+    notes: [
+      {
+        id: 'portable-note',
+        title: 'Portable drawing',
+        updatedAt: 200,
+        favorite: true,
+        pageIcon: '🌸',
+        hasCover: true,
+        drawing,
+        blocks: [{ id: 'portable-block', kind: 'text', content: 'Travels with the backup' }],
+      },
+      {
+        id: 'archived-note',
+        title: 'Archived reference',
+        updatedAt: 100,
+        favorite: false,
+        archived: true,
+        blocks: [{ id: 'archived-block', kind: 'checklist', content: 'Still available', checked: true }],
+      },
+    ],
+    tombstones: {},
+  }))
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'Note title' })).toHaveValue('Portable drawing')
+
+  await page.getByRole('button', { name: 'Workspace options' }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('menuitem', { name: 'Download backup' }).click()
+  const backupDownload = await downloadPromise
+  expect(await backupDownload.failure()).toBeNull()
+  const backupPath = await backupDownload.path()
+  expect(backupPath).not.toBeNull()
+  if (!backupPath) return
+
+  const exportedNotes = JSON.parse(await readFile(backupPath, 'utf8'))
+  expect(exportedNotes).toHaveLength(2)
+  expect(exportedNotes).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      id: 'portable-note',
+      title: 'Portable drawing',
+      favorite: true,
+      pageIcon: '🌸',
+      hasCover: true,
+      drawing,
+    }),
+    expect.objectContaining({
+      id: 'archived-note',
+      title: 'Archived reference',
+      archived: true,
+    }),
+  ]))
+
+  await page.getByLabel('Choose a JSON file to import notes').setInputFiles(backupPath)
+  await expect(page.locator('.toast')).toHaveText('Imported 2 notes.')
+  await expect.poll(async () => {
+    const record = await readIndexedWorkspaceRecord(page, 'current')
+    return typeof record === 'string' ? JSON.parse(record).notes.length : 0
+  }).toBe(4)
+
+  const roundTrippedRecord = await readIndexedWorkspaceRecord(page, 'current')
+  expect(typeof roundTrippedRecord).toBe('string')
+  const roundTrippedNotes = JSON.parse(roundTrippedRecord as string).notes
+  const drawingCopies = roundTrippedNotes.filter((note: { title: string }) => note.title === 'Portable drawing')
+  const archivedCopies = roundTrippedNotes.filter((note: { title: string }) => note.title === 'Archived reference')
+  expect(drawingCopies).toHaveLength(2)
+  expect(archivedCopies).toHaveLength(2)
+  expect(new Set(drawingCopies.map((note: { id: string }) => note.id)).size).toBe(2)
+  expect(drawingCopies).toEqual(expect.arrayContaining([
+    expect.objectContaining({ favorite: true, pageIcon: '🌸', hasCover: true, drawing }),
+    expect.objectContaining({ favorite: true, pageIcon: '🌸', hasCover: true, drawing }),
+  ]))
+  expect(archivedCopies.every((note: { archived?: boolean }) => note.archived === true)).toBe(true)
+})
+
+test('imports valid notes from a partially malformed backup and reports skipped entries', async ({ page }) => {
+  const partialBackup = JSON.stringify([
+    {
+      title: 'Recovered partial note',
+      blocks: [
+        { kind: 'text', content: 'Valid content' },
+        { kind: 'unknown', content: 'Invalid block' },
+      ],
+    },
+    { title: 'No usable blocks', blocks: [{ kind: 'unknown', content: 'Invalid' }] },
+    { title: false, blocks: [{ kind: 'text', content: 'Invalid title' }] },
+  ])
+
+  await page.getByLabel('Choose a JSON file to import notes').setInputFiles({
+    name: 'partial-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(partialBackup),
+  })
+
+  await expect(page.locator('.toast')).toHaveText('Imported 1 note. Skipped 2.')
+  await expect.poll(async () => {
+    const record = await readIndexedWorkspaceRecord(page, 'current')
+    if (typeof record !== 'string') return null
+    const imported = JSON.parse(record).notes.find((note: { title: string }) => note.title === 'Recovered partial note')
+    return imported?.blocks.map((block: { kind: string; content: string }) => ({
+      kind: block.kind,
+      content: block.content,
+    })) ?? null
+  }).toEqual([{ kind: 'text', content: 'Valid content' }])
+})
+
 test('omits an unavailable legacy image without blocking PNG export', async ({ page }) => {
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
