@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
 import { Menu } from 'lucide-react'
-import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
+import { AppSidebar } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
 import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
@@ -14,6 +14,13 @@ import {
   parseImportedNotes,
   serializeNotesExport,
 } from './lib/noteSerialization'
+import {
+  createBlankNote,
+  duplicateNote,
+  getVisibleNotes,
+  type NoteView,
+  type SortOrder,
+} from './lib/noteCollection'
 import { downloadFile } from './lib/platform'
 import type { EditorMode, Note } from './types'
 
@@ -21,16 +28,6 @@ function autosizeTitle(element: HTMLTextAreaElement | null) {
   if (!element) return
   element.style.height = '0px'
   element.style.height = `${element.scrollHeight}px`
-}
-
-function blankNote(): Note {
-  return {
-    id: crypto.randomUUID(),
-    title: '',
-    favorite: false,
-    updatedAt: Date.now(),
-    blocks: [{ id: crypto.randomUUID(), kind: 'text', content: '' }],
-  }
 }
 
 const UPDATE_SAVE_TIMEOUT = 10_000
@@ -84,20 +81,12 @@ export default function App() {
   }, [setWorkspaceState])
 
   const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
-  const visibleNotes = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return notes
-      .filter((note) => {
-        if (Boolean(note.archived) !== (view === 'archive')) return false
-        if (favoritesOnly && !note.favorite) return false
-        if (!normalized) return true
-        const body = note.blocks.map((block) => block.content).join(' ')
-        return `${note.title} ${body}`.toLowerCase().includes(normalized)
-      })
-      .sort((a, b) => sortOrder === 'title'
-        ? (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note')
-        : b.updatedAt - a.updatedAt)
-  }, [favoritesOnly, notes, query, sortOrder, view])
+  const visibleNotes = useMemo(() => getVisibleNotes(notes, {
+    view,
+    query,
+    favoritesOnly,
+    sortOrder,
+  }), [favoritesOnly, notes, query, sortOrder, view])
 
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
@@ -187,7 +176,7 @@ export default function App() {
   }
 
   function createNote() {
-    const note = blankNote()
+    const note = createBlankNote()
     const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
     if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
     setNotes((current) => [note, ...current])
@@ -231,13 +220,7 @@ export default function App() {
 
   function duplicateActiveNote() {
     if (!activeNote) return
-    const duplicate: Note = {
-      ...activeNote,
-      id: crypto.randomUUID(),
-      title: activeNote.title ? `${activeNote.title} copy` : 'Untitled note copy',
-      updatedAt: Date.now(),
-      blocks: activeNote.blocks.map((block) => ({ ...block, id: crypto.randomUUID() })),
-    }
+    const duplicate = duplicateNote(activeNote)
     setNotes((current) => [duplicate, ...current])
     setActiveId(duplicate.id)
     setNoteMenuOpen(false)
@@ -263,7 +246,7 @@ export default function App() {
       setActiveId(nextInView.id)
       return
     }
-    const note = blankNote()
+    const note = createBlankNote()
     setNotes((current) => [note, ...current])
     setActiveId(note.id)
     setView('notes')
@@ -280,7 +263,7 @@ export default function App() {
       nextNote = remaining.find((note) => !note.archived)
     }
     if (!nextNote) {
-      nextNote = blankNote()
+      nextNote = createBlankNote()
       remaining.unshift(nextNote)
       setView('notes')
     }
@@ -463,7 +446,7 @@ export default function App() {
       }
       if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        const note = blankNote()
+        const note = createBlankNote()
         const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
         if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
         setNotes((current) => [note, ...current])

@@ -24,12 +24,10 @@ import type {
   WorkspaceStorageStatus,
 } from '../hooks/useWorkspaceStorage'
 import { modKeyLabel } from '../lib/platform'
+import type { NoteView, SortOrder } from '../lib/noteCollection'
 import { formatStorageSize, type StorageUsage } from '../lib/storageUsage'
 import type { Note } from '../types'
 import { ThemeSwitcher } from './ThemeSwitcher'
-
-export type NoteView = 'notes' | 'archive'
-export type SortOrder = 'updated' | 'title'
 
 interface AppSidebarProps {
   open: boolean
