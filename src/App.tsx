@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import { AppSidebar } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
@@ -8,15 +8,9 @@ import { starterNotes } from './data'
 import { useNoteLibrary } from './hooks/useNoteLibrary'
 import { useTheme } from './hooks/useTheme'
 import { usePwa } from './hooks/usePwa'
+import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
-import {
-  markdownFilename,
-  noteToMarkdown,
-  parseImportedNotes,
-  serializeNotesExport,
-} from './lib/noteSerialization'
 import type { NoteView } from './lib/noteCollection'
-import { downloadFile } from './lib/platform'
 import type { EditorMode } from './types'
 
 function autosizeTitle(element: HTMLTextAreaElement | null) {
@@ -71,7 +65,6 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLButtonElement>(null)
   const sidebarWasOpenRef = useRef(false)
   const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
@@ -83,6 +76,15 @@ export default function App() {
   const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
   const previousOnlineRef = useRef(true)
   const pwaReloadRunningRef = useRef(false)
+  const workspaceActions = useWorkspaceActions({
+    notes,
+    activeNote,
+    prependNotes,
+    recovery: workspaceRecovery,
+    replaceUnsafeWorkspace,
+    requestPersistence: requestStoragePersistence,
+    notify: setNotice,
+  })
 
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
@@ -217,64 +219,18 @@ export default function App() {
   }
 
   function exportNotes() {
-    const file = new Blob([serializeNotesExport(notes)], { type: 'application/json' })
-    downloadFile(file, `chill-notes-${new Date().toISOString().slice(0, 10)}.json`)
     setWorkspaceMenuOpen(false)
-    setNotice(`Exported ${notes.length} ${notes.length === 1 ? 'note' : 'notes'} as JSON.`)
-  }
-
-  function downloadWorkspaceRecovery() {
-    if (!workspaceRecovery) return
-    const file = new Blob([workspaceRecovery.raw], { type: 'application/json;charset=utf-8' })
-    downloadFile(file, `chill-notes-indexeddb-recovery-${new Date().toISOString().slice(0, 10)}.json`)
-    setNotice('Downloaded the original IndexedDB data.')
-  }
-
-  function replaceRecoveredWorkspace() {
-    if (!workspaceRecovery) return
-    const confirmed = window.confirm(
-      'Replace the unreadable saved workspace with the workspace currently open in this tab? '
-      + 'Download the original data first if you may need it later.',
-    )
-    if (!confirmed) return
-    replaceUnsafeWorkspace()
-    setNotice('Replacing the saved workspace with the current one.')
+    workspaceActions.exportNotes()
   }
 
   function exportActiveNoteAsMarkdown() {
-    if (!activeNote) return
-    const file = new Blob([noteToMarkdown(activeNote)], { type: 'text/markdown;charset=utf-8' })
-    downloadFile(file, markdownFilename(activeNote.title))
+    if (!workspaceActions.exportActiveNoteAsMarkdown()) return
     setNoteMenuOpen(false)
-    setNotice('Exported this note as Markdown.')
   }
 
   function chooseImportFile() {
     setWorkspaceMenuOpen(false)
-    importInputRef.current?.click()
-  }
-
-  async function importNotes(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget
-    const file = input.files?.[0]
-    if (!file) return
-
-    try {
-      const result = parseImportedNotes(await file.text())
-      if (result.notes.length === 0) {
-        setNotice(result.skipped > 0 ? `No valid notes found. Skipped ${result.skipped}.` : 'No notes found to import.')
-        return
-      }
-
-      prependNotes(result.notes)
-      const noteLabel = result.notes.length === 1 ? 'note' : 'notes'
-      const skipped = result.skipped > 0 ? ` Skipped ${result.skipped}.` : ''
-      setNotice(`Imported ${result.notes.length} ${noteLabel}.${skipped}`)
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not import that file.')
-    } finally {
-      input.value = ''
-    }
+    workspaceActions.chooseImportFile()
   }
 
   async function installPwa() {
@@ -291,21 +247,8 @@ export default function App() {
   }
 
   async function protectLocalStorage() {
-    const result = await requestStoragePersistence()
+    await workspaceActions.protectLocalStorage()
     setWorkspaceMenuOpen(false)
-    if (result === 'persistent') {
-      setNotice('Persistent storage enabled. Your local notes are better protected from automatic cleanup.')
-      return
-    }
-    if (result === 'denied') {
-      setNotice('This browser did not grant persistent storage. Keep downloading regular backups.')
-      return
-    }
-    if (result === 'unsupported') {
-      setNotice('Persistent storage is not supported in this browser. Keep downloading regular backups.')
-      return
-    }
-    setNotice('Could not request persistent storage. Try again from Workspace options.')
   }
 
   const saveBeforePwaReload = useCallback(async () => {
@@ -411,8 +354,8 @@ export default function App() {
         usage={storageUsage}
         recovery={workspaceRecovery}
         onDownloadBackup={exportNotes}
-        onDownloadRecovery={downloadWorkspaceRecovery}
-        onReplaceWorkspace={replaceRecoveredWorkspace}
+        onDownloadRecovery={workspaceActions.downloadWorkspaceRecovery}
+        onReplaceWorkspace={workspaceActions.replaceRecoveredWorkspace}
       />
       {pwa.needRefresh && (
         <PwaUpdateNotice
@@ -438,7 +381,7 @@ export default function App() {
         pwaInstallMode={pwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
-        importInputRef={importInputRef}
+        importInputRef={workspaceActions.importInputRef}
         onClose={() => setSidebarOpen(false)}
         onCreateNote={createNote}
         onQueryChange={setQuery}
@@ -462,7 +405,7 @@ export default function App() {
         onExportNotes={exportNotes}
         onRequestStoragePersistence={protectLocalStorage}
         onInstallApp={installPwa}
-        onImportNotes={importNotes}
+        onImportNotes={workspaceActions.importNotes}
       />
 
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
