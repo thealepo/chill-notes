@@ -41,8 +41,10 @@ export default function App() {
     setWorkspace: setWorkspaceState,
     status: storageStatus,
     usage: storageUsage,
+    persistence: storagePersistence,
     syncedAt,
     flush: flushWorkspace,
+    requestPersistence: requestStoragePersistence,
     recovery: workspaceRecovery,
     replaceUnsafeWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
@@ -369,6 +371,24 @@ export default function App() {
     }
   }
 
+  async function protectLocalStorage() {
+    const result = await requestStoragePersistence()
+    setWorkspaceMenuOpen(false)
+    if (result === 'persistent') {
+      setNotice('Persistent storage enabled. Your local notes are better protected from automatic cleanup.')
+      return
+    }
+    if (result === 'denied') {
+      setNotice('This browser did not grant persistent storage. Keep downloading regular backups.')
+      return
+    }
+    if (result === 'unsupported') {
+      setNotice('Persistent storage is not supported in this browser. Keep downloading regular backups.')
+      return
+    }
+    setNotice('Could not request persistent storage. Try again from Workspace options.')
+  }
+
   const saveBeforePwaReload = useCallback(async () => {
     const savedStatus = await Promise.race([
       flushWorkspace(),
@@ -504,6 +524,7 @@ export default function App() {
         workspaceMenuOpen={workspaceMenuOpen}
         storageStatus={storageStatus}
         storageUsage={storageUsage}
+        storagePersistence={storagePersistence}
         pwaInstallMode={pwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
@@ -529,6 +550,7 @@ export default function App() {
         }}
         onChooseImport={chooseImportFile}
         onExportNotes={exportNotes}
+        onRequestStoragePersistence={protectLocalStorage}
         onInstallApp={installPwa}
         onImportNotes={importNotes}
       />

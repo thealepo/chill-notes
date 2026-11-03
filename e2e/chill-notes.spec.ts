@@ -475,6 +475,75 @@ test('warns about low browser capacity and downloads a recovery backup', async (
   expect(await backup.failure()).toBeNull()
 })
 
+test('requests persistent storage only after a user action and shows the granted state', async ({ page }) => {
+  await page.addInitScript(() => {
+    const testWindow = window as typeof window & { __storagePersistCalls: number }
+    testWindow.__storagePersistCalls = 0
+    let persistent = false
+    Object.defineProperty(navigator.storage, 'persisted', {
+      configurable: true,
+      value: async () => persistent,
+    })
+    Object.defineProperty(navigator.storage, 'persist', {
+      configurable: true,
+      value: async () => {
+        testWindow.__storagePersistCalls += 1
+        persistent = true
+        return true
+      },
+    })
+  })
+  await page.reload()
+
+  await page.getByRole('button', { name: 'Workspace options' }).click()
+  await expect(page.getByText('Storage may be cleared if space is needed')).toBeVisible()
+  expect(await page.evaluate(() => (
+    window as typeof window & { __storagePersistCalls: number }
+  ).__storagePersistCalls)).toBe(0)
+
+  await page.getByRole('menuitem', { name: 'Protect local data' }).click()
+  await expect(page.locator('.toast')).toContainText('Persistent storage enabled')
+  expect(await page.evaluate(() => (
+    window as typeof window & { __storagePersistCalls: number }
+  ).__storagePersistCalls)).toBe(1)
+
+  await page.getByRole('button', { name: 'Workspace options' }).click()
+  await expect(page.locator('.workspace-menu').getByText('Persistent storage enabled', { exact: true })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Protect local data' })).toHaveCount(0)
+})
+
+test('recovers an edit when the page closes immediately after the lifecycle handoff', async ({ page, context }) => {
+  await expect(page.locator('.save-state')).toContainText('Saved')
+  const stagedTitle = await page.evaluate(() => {
+    const title = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note title"]')
+    if (!title) throw new Error('Note title was not found.')
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    if (!valueSetter) throw new Error('Textarea value setter was not found.')
+    valueSetter.call(title, 'Survives an immediate close')
+    title.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      data: 'Survives an immediate close',
+      inputType: 'insertText',
+    }))
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }))
+
+    const staged = window.localStorage.getItem('chill-notes-v1')
+    return staged ? JSON.parse(staged).notes[0]?.title : null
+  })
+  expect(stagedTitle).toBe('Survives an immediate close')
+
+  await page.close({ runBeforeUnload: false })
+  const reopenedPage = await context.newPage()
+  await reopenedPage.goto('/')
+  await expect(reopenedPage.getByRole('textbox', { name: 'Note title' })).toHaveValue(
+    'Survives an immediate close',
+  )
+  await expect(reopenedPage.locator('.save-state')).toContainText('Saved')
+  await expect.poll(() => reopenedPage.evaluate(() => (
+    window.localStorage.getItem('chill-notes-v1')
+  ))).toBeNull()
+})
+
 test('syncs IndexedDB-backed edits between open tabs', async ({ page, context }) => {
   await page.getByRole('textbox', { name: 'Note title' }).fill('Shared through IndexedDB')
   await expect(page.locator('.save-state')).toContainText('Saved')

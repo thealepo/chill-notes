@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Search,
   Settings,
+  ShieldCheck,
   Smartphone,
   Upload,
   X,
@@ -18,7 +19,10 @@ import {
 import type { ChangeEventHandler, RefObject } from 'react'
 import type { PwaInstallMode } from '../hooks/usePwa'
 import type { ThemePreference } from '../hooks/useTheme'
-import type { WorkspaceStorageStatus } from '../hooks/useWorkspaceStorage'
+import type {
+  WorkspaceStoragePersistence,
+  WorkspaceStorageStatus,
+} from '../hooks/useWorkspaceStorage'
 import { modKeyLabel } from '../lib/platform'
 import { formatStorageSize, type StorageUsage } from '../lib/storageUsage'
 import type { Note } from '../types'
@@ -39,6 +43,7 @@ interface AppSidebarProps {
   workspaceMenuOpen: boolean
   storageStatus: WorkspaceStorageStatus
   storageUsage: StorageUsage | null
+  storagePersistence: WorkspaceStoragePersistence
   pwaInstallMode: PwaInstallMode
   themePreference: ThemePreference
   searchInputRef: RefObject<HTMLInputElement>
@@ -56,6 +61,7 @@ interface AppSidebarProps {
   onToggleWorkspaceMenu: () => void
   onChooseImport: () => void
   onExportNotes: () => void
+  onRequestStoragePersistence: () => void
   onInstallApp: () => void
   onImportNotes: ChangeEventHandler<HTMLInputElement>
 }
@@ -90,6 +96,7 @@ export function AppSidebar({
   workspaceMenuOpen,
   storageStatus,
   storageUsage,
+  storagePersistence,
   pwaInstallMode,
   themePreference,
   searchInputRef,
@@ -107,6 +114,7 @@ export function AppSidebar({
   onToggleWorkspaceMenu,
   onChooseImport,
   onExportNotes,
+  onRequestStoragePersistence,
   onInstallApp,
   onImportNotes,
 }: AppSidebarProps) {
@@ -121,6 +129,19 @@ export function AppSidebar({
           : storageStatus.phase === 'warning'
             ? 'Saved with limited storage'
             : 'Saved locally'
+  const persistenceLabel = storagePersistence === 'persistent'
+    ? 'Persistent storage enabled'
+    : storagePersistence === 'available'
+      ? 'Storage may be cleared if space is needed'
+      : storagePersistence === 'requesting'
+        ? 'Requesting persistent storage…'
+        : storagePersistence === 'denied'
+          ? 'Browser did not grant persistent storage'
+          : storagePersistence === 'unsupported'
+            ? 'Persistent storage unavailable'
+            : storagePersistence === 'error'
+              ? 'Could not check storage protection'
+              : 'Checking storage protection…'
 
   return (
     <aside className={`sidebar ${open ? 'is-open' : ''}`}>
@@ -240,12 +261,18 @@ export function AppSidebar({
           </button>
           {workspaceMenuOpen && (
             <div className="workspace-menu" role="menu">
-              {storageUsage && (
-                <div className={`storage-summary is-${storageUsage.pressure}`} role="presentation">
+              {(storageUsage || storagePersistence) && (
+                <div
+                  className={`storage-summary${storageUsage ? ` is-${storageUsage.pressure}` : ''}`}
+                  role="presentation"
+                >
                   <HardDrive size={15} />
                   <span>
                     <strong>Browser storage</strong>
-                    <small>{formatStorageSize(storageUsage.usage)} of {formatStorageSize(storageUsage.quota)} used</small>
+                    {storageUsage && (
+                      <small>{formatStorageSize(storageUsage.usage)} of {formatStorageSize(storageUsage.quota)} used</small>
+                    )}
+                    <small className="storage-persistence-status">{persistenceLabel}</small>
                   </span>
                 </div>
               )}
@@ -253,6 +280,20 @@ export function AppSidebar({
                 <button onClick={onInstallApp} role="menuitem">
                   <Smartphone size={15} />
                   {pwaInstallMode === 'ios' ? 'Add to Home Screen' : 'Install Chill Notes'}
+                </button>
+              )}
+              {storagePersistence !== 'persistent' && storagePersistence !== 'unsupported' && (
+                <button
+                  onClick={onRequestStoragePersistence}
+                  role="menuitem"
+                  disabled={storagePersistence === 'checking' || storagePersistence === 'requesting'}
+                >
+                  <ShieldCheck size={15} />
+                  {storagePersistence === 'requesting'
+                    ? 'Requesting protection…'
+                    : storagePersistence === 'denied' || storagePersistence === 'error'
+                      ? 'Retry storage protection'
+                      : 'Protect local data'}
                 </button>
               )}
               <button onClick={onChooseImport} role="menuitem"><Upload size={15} />Import notes</button>
