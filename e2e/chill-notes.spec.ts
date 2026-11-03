@@ -261,10 +261,17 @@ test('round-trips a JSON backup with drawings, favorites, and archived notes', a
   expect(drawingCopies).toHaveLength(2)
   expect(archivedCopies).toHaveLength(2)
   expect(new Set(drawingCopies.map((note: { id: string }) => note.id)).size).toBe(2)
-  expect(drawingCopies).toEqual(expect.arrayContaining([
-    expect.objectContaining({ favorite: true, pageIcon: '🌸', hasCover: true, drawing }),
-    expect.objectContaining({ favorite: true, pageIcon: '🌸', hasCover: true, drawing }),
-  ]))
+  expect(drawingCopies.every((note: {
+    favorite: boolean
+    pageIcon?: string
+    hasCover?: boolean
+    drawing?: string
+  }) => (
+    note.favorite === true
+    && note.pageIcon === '🌸'
+    && note.hasCover === true
+    && note.drawing === drawing
+  ))).toBe(true)
   expect(archivedCopies.every((note: { archived?: boolean }) => note.archived === true)).toBe(true)
 })
 

@@ -49,8 +49,16 @@ test('JSON backup round-trips drawings and presentation metadata with fresh IDs'
   assert.equal(result.notes.length, 1)
   const [restored] = result.notes
   assert.notEqual(restored.id, original.id)
+  assert.equal(restored.blocks.length, original.blocks.length)
   assert.notEqual(restored.blocks[0].id, original.blocks[0].id)
-  assert.deepEqual({ ...restored, id: original.id, blocks: original.blocks }, original)
+  assert.deepEqual({
+    ...restored,
+    id: original.id,
+    blocks: restored.blocks.map((block, index) => ({
+      ...block,
+      id: original.blocks[index].id,
+    })),
+  }, original)
   assert.equal(parseDrawingScene(restored.drawing).elements[0]?.type, 'rectangle')
 })
 
