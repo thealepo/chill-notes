@@ -1055,6 +1055,8 @@ textarea:focus-visible {
 .page-cover + .document-column { padding-top: 0; }
 
 .page-icon {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 74px;
