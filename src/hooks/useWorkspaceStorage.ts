@@ -96,6 +96,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
   const revisionRef = useRef(0)
   const pendingSaveRef = useRef<PendingWorkspaceSave | null>(null)
   const saveRunningRef = useRef(false)
+  const dirtyRef = useRef(false)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const mountedRef = useRef(true)
   const persistenceBlockedRef = useRef(false)
@@ -103,7 +104,14 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
 
   const setWorkspace: Dispatch<SetStateAction<StoredWorkspace>> = useCallback((update) => {
     if (!hydratedRef.current) touchedBeforeHydrationRef.current = true
-    setWorkspaceState(update)
+    setWorkspaceState((current) => {
+      const next = typeof update === 'function' ? update(current) : update
+      if (next !== current) {
+        workspaceRef.current = next
+        dirtyRef.current = true
+      }
+      return next
+    })
   }, [])
 
   const refreshUsage = useCallback(async () => {
@@ -156,11 +164,12 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
 
       try {
         await writeIndexedWorkspace(snapshot)
-        removeLegacyWorkspace()
+        if (revision === revisionRef.current && !pendingSaveRef.current) removeLegacyWorkspace()
         announceWorkspaceChange()
         channelRef.current?.postMessage({ type: 'workspace-changed' })
         nextStatus = { phase: 'saved', backend: 'indexeddb' }
       } catch {
+        if (revision !== revisionRef.current) continue
         // Private browsing modes and restrictive browser settings can disable
         // IndexedDB. Retain the previous localStorage path as a fallback.
         try {
@@ -171,6 +180,12 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
         }
       }
 
+      if (
+        revision === revisionRef.current
+        && (nextStatus.phase === 'saved' || nextStatus.phase === 'warning')
+      ) {
+        dirtyRef.current = false
+      }
       if (mountedRef.current && revision === revisionRef.current) {
         statusRef.current = nextStatus
         setStatus(nextStatus)
@@ -183,6 +198,7 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
 
   const persist = useCallback((snapshot: StoredWorkspace) => {
     if (persistenceBlockedRef.current) return
+    dirtyRef.current = true
     const revision = ++revisionRef.current
     pendingSaveRef.current = { snapshot, revision }
     const savingStatus = { ...statusRef.current, phase: 'saving' } satisfies WorkspaceStorageStatus
@@ -204,6 +220,19 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
       await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
     }
     return statusRef.current
+  }, [persist])
+
+  const protectPendingWorkspace = useCallback(() => {
+    if (!hydratedRef.current || persistenceBlockedRef.current || !dirtyRef.current) return
+    try {
+      // Page lifecycle events cannot wait for IndexedDB. Keep a synchronous
+      // recovery shadow until the newest queued IndexedDB write completes.
+      writeLegacyWorkspace(workspaceRef.current)
+    } catch {
+      // Large drawing workspaces can exceed localStorage; the active
+      // IndexedDB transaction remains the primary save path.
+    }
+    persist(workspaceRef.current)
   }, [persist])
 
   useEffect(() => {
@@ -262,6 +291,19 @@ export function useWorkspaceStorage(fallbackWorkspace: StoredWorkspace): UseWork
     if (!hydratedRef.current) return
     persist(workspace)
   }, [persist, workspace])
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') protectPendingWorkspace()
+    }
+
+    window.addEventListener('pagehide', protectPendingWorkspace)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', protectPendingWorkspace)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [protectPendingWorkspace])
 
   useEffect(() => {
     async function mergeLatestIndexedWorkspace() {
