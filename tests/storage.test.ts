@@ -32,6 +32,7 @@ test('stored notes discard malformed optional fields without discarding valid co
     ...note('safe', 1),
     drawing: 42,
     pageIcon: { emoji: '🌸' },
+    pageCover: 'glitch',
     hasCover: 'yes',
     archived: 1,
   }])
@@ -39,7 +40,8 @@ test('stored notes discard malformed optional fields without discarding valid co
   assert.equal(normalized.id, 'safe')
   assert.equal(normalized.drawing, undefined)
   assert.equal(normalized.pageIcon, undefined)
-  assert.equal(normalized.hasCover, undefined)
+  assert.equal(normalized.pageCover, undefined)
+  assert.equal('hasCover' in normalized, false)
   assert.equal(normalized.archived, undefined)
   assert.deepEqual(parseDrawingScene(42).elements, [])
 })

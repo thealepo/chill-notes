@@ -12,6 +12,7 @@ A calm, rose-toned note-taking app for typing, equations, sketches, and handwrit
 - Select, move, resize, duplicate, reorder, pan, zoom, switch paper templates, undo/redo, and export the full board as PNG
 - PNG export reports and skips an unavailable legacy background image instead of blocking the export
 - Multiple searchable notes, favorites, focus mode, and responsive navigation
+- Per-note icon and cover pickers with custom emoji and eight theme-aware cover styles
 - One-click JSON recovery backups, defensive import, and per-note Markdown export
 - Conflict-safe synchronization between open browser tabs
 - System-aware light and dark themes with persisted Light, Dark, and System preferences

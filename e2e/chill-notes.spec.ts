@@ -118,6 +118,41 @@ test('makes LaTeX source secondary to a full-size display equation', async ({ pa
   expect(resultSize).toBeGreaterThan(sourceSize)
 })
 
+test('chooses and persists note icons and covers', async ({ page }) => {
+  await page.getByRole('button', { name: 'Add icon' }).click()
+  const iconPicker = page.getByRole('dialog', { name: 'Choose a page icon' })
+  await expect(iconPicker).toBeVisible()
+  await iconPicker.getByRole('button', { name: 'Use 🌊 as page icon' }).click()
+
+  await page.getByRole('button', { name: 'Add cover' }).click()
+  const coverPicker = page.getByRole('dialog', { name: 'Choose a page cover' })
+  await expect(coverPicker.locator('.cover-choice')).toHaveCount(8)
+  await coverPicker.getByRole('button', { name: 'Quiet ocean' }).click()
+
+  await expect(page.getByRole('button', { name: 'Change page icon: 🌊' })).toBeVisible()
+  await expect(page.locator('.page-cover')).toHaveAttribute('data-cover', 'ocean')
+  await expect(page.locator('.note-icon').first()).toHaveText('🌊')
+  await expect.poll(async () => {
+    const record = await readIndexedWorkspaceRecord(page, 'current')
+    if (typeof record !== 'string') return null
+    const stored = JSON.parse(record).notes[0]
+    return { pageIcon: stored?.pageIcon, pageCover: stored?.pageCover }
+  }).toEqual({ pageIcon: '🌊', pageCover: 'ocean' })
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Change page icon: 🌊' })).toBeVisible()
+  await expect(page.locator('.page-cover')).toHaveAttribute('data-cover', 'ocean')
+
+  await page.getByRole('button', { name: 'Change page icon: 🌊' }).click()
+  await page.getByLabel('Custom emoji or symbol').fill('🐚')
+  await page.getByRole('button', { name: 'Use icon' }).click()
+  await expect(page.getByRole('button', { name: 'Change page icon: 🐚' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Change cover' }).click()
+  await page.getByRole('button', { name: 'Golden sunset' }).click()
+  await expect(page.locator('.page-cover')).toHaveAttribute('data-cover', 'sunset')
+})
+
 test('creates a shape with a pointer gesture and supports undo and redo', async ({ page }) => {
   await openDrawing(page)
   await page.getByRole('button', { name: 'Rectangle (R)' }).click()
@@ -219,7 +254,7 @@ test('round-trips a JSON backup with drawings, favorites, and archived notes', a
         updatedAt: 200,
         favorite: true,
         pageIcon: '🌸',
-        hasCover: true,
+        pageCover: 'lavender',
         drawing,
         blocks: [{ id: 'portable-block', kind: 'text', content: 'Travels with the backup' }],
       },
@@ -254,7 +289,7 @@ test('round-trips a JSON backup with drawings, favorites, and archived notes', a
       title: 'Portable drawing',
       favorite: true,
       pageIcon: '🌸',
-      hasCover: true,
+      pageCover: 'lavender',
       drawing,
     }),
     expect.objectContaining({
@@ -282,12 +317,12 @@ test('round-trips a JSON backup with drawings, favorites, and archived notes', a
   expect(drawingCopies.every((note: {
     favorite: boolean
     pageIcon?: string
-    hasCover?: boolean
+    pageCover?: string
     drawing?: string
   }) => (
     note.favorite === true
     && note.pageIcon === '🌸'
-    && note.hasCover === true
+    && note.pageCover === 'lavender'
     && note.drawing === drawing
   ))).toBe(true)
   expect(archivedCopies.every((note: { archived?: boolean }) => note.archived === true)).toBe(true)

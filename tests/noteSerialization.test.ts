@@ -90,10 +90,11 @@ test('partial imports retain valid content while reporting malformed notes', () 
     },
     { title: 'No usable blocks', blocks: [{ kind: 'unknown', content: 'Nope' }] },
     { title: 42, blocks: [{ kind: 'text', content: 'Invalid title' }] },
+    { title: 'Unknown cover', pageCover: 'glitch', blocks: [{ kind: 'text', content: 'Invalid cover' }] },
     'not a note',
   ]))
 
-  assert.equal(result.skipped, 3)
+  assert.equal(result.skipped, 4)
   assert.equal(result.notes.length, 1)
   assert.equal(result.notes[0].title, 'Partially valid')
   assert.equal(result.notes[0].favorite, true)
