@@ -1,5 +1,5 @@
 import type { BlockKind, Note, NoteBlock } from '../types'
-import { DEFAULT_NOTE_COVER, isNoteCover } from './noteAppearance'
+import { DEFAULT_NOTE_COVER, isNoteCover } from './noteAppearance.ts'
 
 const BLOCK_KINDS = new Set<BlockKind>([
   'text',
