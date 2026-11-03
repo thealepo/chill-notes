@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, test, and build
+    name: Audit, lint, test, and build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -35,7 +35,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Lint, test, and build
+      - name: Audit, lint, test, and build
         run: npm run check
 
       - name: Upload browser-test report
