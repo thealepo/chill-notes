@@ -7,6 +7,7 @@ import {
 import { DrawingCanvasSurface } from './DrawingCanvasSurface'
 import { DrawingSelectionToolbar, DrawingToolbar } from './DrawingControls'
 import { drawingColors, drawingTools } from './drawingControlsConfig'
+import { useDrawingSceneHistory } from '../hooks/useDrawingSceneHistory'
 import {
   DRAWING_SCENE_VERSION,
   elementBounds,
@@ -14,7 +15,6 @@ import {
   parseDrawingSceneResult,
   resizeElementFromBounds,
   sceneContentBounds,
-  serializeDrawingScene,
   topElementAt,
   type DrawingElement,
   type DrawingPoint,
@@ -30,7 +30,6 @@ import {
   moveDrawingElement,
   nextEditableElement,
 } from '../lib/drawingKeyboard'
-import { appendDrawingHistory, stepDrawingHistory } from '../lib/drawingHistory'
 import { downloadDrawingScene } from '../lib/drawingExport'
 import {
   beginViewportGesture,
@@ -92,17 +91,18 @@ function cloneElement<T extends DrawingElement>(element: T): T {
   return structuredClone(element)
 }
 
-function drawingValue(scene: DrawingScene): string {
-  return scene.elements.length === 0 && scene.paper === 'dot' ? '' : serializeDrawingScene(scene)
-}
-
 export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCanvasProps) {
   const initialParseRef = useRef(parseDrawingSceneResult(initialDrawing))
   const initialSceneRef = useRef(initialParseRef.current.scene)
-  const [scene, setScene] = useState(initialSceneRef.current)
-  const sceneRef = useRef(scene)
-  const [history, setHistory] = useState<DrawingScene[]>([initialSceneRef.current])
-  const [historyIndex, setHistoryIndex] = useState(0)
+  const {
+    scene,
+    sceneRef,
+    setLiveScene,
+    commitScene,
+    moveHistory: moveSceneHistory,
+    canUndo,
+    canRedo,
+  } = useDrawingSceneHistory({ initialScene: initialSceneRef.current, onChange })
   const [tool, setTool] = useState<DrawingTool>('select')
   const [color, setColor] = useState(drawingColors[0].value)
   const [size, setSize] = useState(4)
@@ -133,11 +133,6 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     [scene.elements, selectedId],
   )
 
-  const setLiveScene = useCallback((next: DrawingScene) => {
-    sceneRef.current = next
-    setScene(next)
-  }, [])
-
   const setLiveViewport = useCallback((next: DrawingViewport) => {
     viewportRef.current = next
     setViewport(next)
@@ -166,14 +161,6 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     const timeout = window.setTimeout(() => setExportStatus(''), 6_000)
     return () => window.clearTimeout(timeout)
   }, [exportStatus, exporting])
-
-  const commitScene = useCallback((next: DrawingScene) => {
-    setLiveScene(next)
-    const update = appendDrawingHistory(history, historyIndex, next)
-    setHistory(update.entries)
-    setHistoryIndex(update.index)
-    onChange(drawingValue(next))
-  }, [history, historyIndex, onChange, setLiveScene])
 
   useEffect(() => {
     const frame = frameRef.current
@@ -219,13 +206,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   }, [editing])
 
   const moveHistory = useCallback((direction: -1 | 1) => {
-    const step = stepDrawingHistory(history, historyIndex, direction)
-    if (!step) return
-    setHistoryIndex(step.index)
+    if (!moveSceneHistory(direction)) return
     setSelectedId(null)
-    setLiveScene(step.scene)
-    onChange(drawingValue(step.scene))
-  }, [history, historyIndex, onChange, setLiveScene])
+  }, [moveSceneHistory])
 
   const deleteSelected = useCallback(() => {
     if (!selectedId) return
@@ -861,8 +844,8 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
         color={color}
         size={size}
         paper={scene.paper}
-        canUndo={historyIndex > 0}
-        canRedo={historyIndex < history.length - 1}
+        canUndo={canUndo}
+        canRedo={canRedo}
         hasElements={scene.elements.length > 0}
         exporting={exporting}
         onToolChange={setTool}
