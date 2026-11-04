@@ -16,6 +16,16 @@ import {
   structuralBlockKinds,
 } from './noteEditorConfig'
 import { hasInlineMath } from '../lib/mathContent'
+import {
+  duplicateNoteBlock,
+  insertNoteBlock,
+  mergeNoteBlockIntoPrevious,
+  moveNoteBlock,
+  numberedNoteBlockPosition,
+  removeNoteBlock,
+  reorderNoteBlock,
+  updateNoteBlock,
+} from '../lib/noteBlocks'
 import type { BlockKind, Note, NoteBlock } from '../types'
 
 interface NoteEditorProps {
@@ -88,7 +98,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
   }
 
   function updateBlock(id: string, patch: Partial<NoteBlock>) {
-    commit(note.blocks.map((block) => (block.id === id ? { ...block, ...patch } : block)))
+    commit(updateNoteBlock(note.blocks, id, patch))
   }
 
   /** Inserts a block after `afterId`, optionally patching that block in the same commit. */
@@ -97,55 +107,33 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
     afterId?: string,
     options: { content?: string; patchCurrent?: Partial<NoteBlock>; caret?: CaretPosition } = {},
   ) {
-    const newBlock: NoteBlock = {
-      id: crypto.randomUUID(),
-      kind,
-      content: options.content ?? '',
-      ...(kind === 'checklist' ? { checked: false } : {}),
-    }
-    const afterIndex = afterId ? note.blocks.findIndex((block) => block.id === afterId) : note.blocks.length - 1
-    const blocks = note.blocks.map((block) => (
-      block.id === afterId && options.patchCurrent ? { ...block, ...options.patchCurrent } : block
-    ))
-    blocks.splice(afterIndex + 1, 0, newBlock)
-    commit(blocks)
+    const result = insertNoteBlock(note.blocks, kind, afterId, options, () => crypto.randomUUID())
+    commit(result.blocks)
     setActionsBlock(null)
     setInsertMenuBlock(null)
-    focusBlock(newBlock.id, options.caret ?? 'end')
-    return newBlock.id
+    focusBlock(result.block.id, options.caret ?? 'end')
+    return result.block.id
   }
 
   function removeBlock(id: string) {
     setActionsBlock(null)
-    if (note.blocks.length === 1) {
-      updateBlock(id, { kind: 'text', content: '', checked: false })
-      focusBlock(id)
-      return
-    }
-    const index = note.blocks.findIndex((block) => block.id === id)
-    const nextBlocks = note.blocks.filter((block) => block.id !== id)
-    commit(nextBlocks)
-    focusBlock(nextBlocks[Math.max(0, index - 1)]?.id)
+    const result = removeNoteBlock(note.blocks, id)
+    if (!result) return
+    commit(result.blocks)
+    focusBlock(result.focusId)
   }
 
   function duplicateBlock(id: string) {
-    const index = note.blocks.findIndex((block) => block.id === id)
-    if (index < 0) return
-    const duplicate = { ...note.blocks[index], id: crypto.randomUUID() }
-    const blocks = [...note.blocks]
-    blocks.splice(index + 1, 0, duplicate)
-    commit(blocks)
+    const result = duplicateNoteBlock(note.blocks, id, () => crypto.randomUUID())
+    if (!result) return
+    commit(result.blocks)
     setActionsBlock(null)
-    focusBlock(duplicate.id)
+    focusBlock(result.block.id)
   }
 
   function moveBlock(id: string, direction: -1 | 1) {
-    const index = note.blocks.findIndex((block) => block.id === id)
-    const nextIndex = index + direction
-    if (index < 0 || nextIndex < 0 || nextIndex >= note.blocks.length) return
-    const blocks = [...note.blocks]
-    const [block] = blocks.splice(index, 1)
-    blocks.splice(nextIndex, 0, block)
+    const blocks = moveNoteBlock(note.blocks, id, direction)
+    if (blocks === note.blocks) return
     commit(blocks)
     const input = blockRefs.current[id]
     focusBlock(id, input ? input.selectionStart : 'end')
@@ -305,11 +293,10 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
       if (block.kind === 'text' && previous && flowingBlockKinds.includes(previous.kind)) {
         // Merge this paragraph into the previous text-like block.
         event.preventDefault()
-        const junction = previous.content.length
-        commit(note.blocks
-          .filter((item) => item.id !== block.id)
-          .map((item) => (item.id === previous.id ? { ...item, content: previous.content + block.content } : item)))
-        focusBlock(previous.id, junction)
+        const result = mergeNoteBlockIntoPrevious(note.blocks, block.id)
+        if (!result) return
+        commit(result.blocks)
+        focusBlock(result.focusId, result.caret)
       }
     }
   }
@@ -332,23 +319,9 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
     const movingId = draggingId
     finishDrag()
     if (!movingId || !target || target.id === movingId) return
-    const moving = note.blocks.find((block) => block.id === movingId)
-    if (!moving) return
-    const blocks = note.blocks.filter((block) => block.id !== movingId)
-    const targetIndex = blocks.findIndex((block) => block.id === target.id)
-    if (targetIndex < 0) return
-    blocks.splice(target.position === 'before' ? targetIndex : targetIndex + 1, 0, moving)
-    if (blocks.every((block, index) => block === note.blocks[index])) return
+    const blocks = reorderNoteBlock(note.blocks, movingId, target.id, target.position)
+    if (blocks === note.blocks) return
     commit(blocks)
-  }
-
-  function numberedPosition(index: number) {
-    let position = 1
-    for (let current = index - 1; current >= 0; current -= 1) {
-      if (note.blocks[current].kind !== 'numbered') break
-      position += 1
-    }
-    return position
   }
 
   return (
@@ -419,7 +392,7 @@ export function NoteEditor({ note, onChange }: NoteEditorProps) {
                 </button>
               )}
               {block.kind === 'bullet' && <span className="list-marker" aria-hidden="true">•</span>}
-              {block.kind === 'numbered' && <span className="list-marker numbered-marker" aria-hidden="true">{numberedPosition(blockIndex)}.</span>}
+              {block.kind === 'numbered' && <span className="list-marker numbered-marker" aria-hidden="true">{numberedNoteBlockPosition(note.blocks, blockIndex)}.</span>}
               {block.kind === 'quote' && <span className="quote-mark" aria-hidden="true">“</span>}
               {block.kind === 'math' && <span className="math-sigil" aria-hidden="true"><Braces size={15} /></span>}
 

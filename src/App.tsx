@@ -1,39 +1,23 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
-import { AppSidebar, type NoteView, type SortOrder } from './components/AppSidebar'
+import { AppSidebar } from './components/AppSidebar'
 import { NoteWorkspace } from './components/NoteWorkspace'
 import { PwaUpdateNotice } from './components/PwaUpdateNotice'
 import { StorageRecoveryNotice } from './components/StorageRecoveryNotice'
 import { starterNotes } from './data'
+import { useAppPwa } from './hooks/useAppPwa'
+import { useNoteLibrary } from './hooks/useNoteLibrary'
 import { useTheme } from './hooks/useTheme'
-import { usePwa } from './hooks/usePwa'
+import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { useWorkspaceStorage } from './hooks/useWorkspaceStorage'
-import {
-  markdownFilename,
-  noteToMarkdown,
-  parseImportedNotes,
-  serializeNotesExport,
-} from './lib/noteSerialization'
-import { downloadFile } from './lib/platform'
-import type { EditorMode, Note } from './types'
+import type { NoteView } from './lib/noteCollection'
+import type { EditorMode } from './types'
 
 function autosizeTitle(element: HTMLTextAreaElement | null) {
   if (!element) return
   element.style.height = '0px'
   element.style.height = `${element.scrollHeight}px`
 }
-
-function blankNote(): Note {
-  return {
-    id: crypto.randomUUID(),
-    title: '',
-    favorite: false,
-    updatedAt: Date.now(),
-    blocks: [{ id: crypto.randomUUID(), kind: 'text', content: '' }],
-  }
-}
-
-const UPDATE_SAVE_TIMEOUT = 10_000
 
 export default function App() {
   const {
@@ -48,81 +32,57 @@ export default function App() {
     recovery: workspaceRecovery,
     replaceUnsafeWorkspace,
   } = useWorkspaceStorage({ notes: starterNotes, tombstones: {} })
-  const notes = workspaceState.notes
-  const [activeId, setActiveId] = useState(() => notes[0]?.id ?? '')
+  const noteLibrary = useNoteLibrary({ workspace: workspaceState, setWorkspace: setWorkspaceState })
+  const {
+    notes,
+    activeNote,
+    visibleNotes,
+    view,
+    query,
+    favoritesOnly,
+    sortOrder,
+    setQuery,
+    selectNote: selectLibraryNote,
+    showView: showLibraryView,
+    createNote: createLibraryNote,
+    prependNotes,
+    updateNote,
+    toggleActiveFavorite,
+    duplicateActiveNote: duplicateLibraryNote,
+    toggleActiveArchive,
+    deleteActiveNote: deleteLibraryNote,
+    toggleFavoritesOnly,
+    toggleSortOrder,
+  } = noteLibrary
   const [mode, setMode] = useState<EditorMode>(() =>
     new URLSearchParams(window.location.search).get('mode') === 'draw' ? 'draw' : 'type',
   )
-  const [view, setView] = useState<NoteView>('notes')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('updated')
-  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [noteMenuOpen, setNoteMenuOpen] = useState(false)
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLTextAreaElement>(null)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLButtonElement>(null)
   const sidebarWasOpenRef = useRef(false)
   const sidebarFocusIntentRef = useRef<'search' | 'title' | null>(null)
-  const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
-  const [updatingPwa, setUpdatingPwa] = useState(false)
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
-  const pwa = usePwa()
-  const { dismissOfflineReady, offlineReady, reloadNeeded: pwaReloadNeeded, reloadPage: reloadPwaPage } = pwa
-  const previousOnlineRef = useRef(true)
-  const pwaReloadRunningRef = useRef(false)
-
-  const setNotes = useCallback((update: SetStateAction<Note[]>) => {
-    setWorkspaceState((current) => ({
-      ...current,
-      notes: typeof update === 'function' ? update(current.notes) : update,
-    }))
-  }, [setWorkspaceState])
-
-  const activeNote = notes.find((note) => note.id === activeId) ?? notes[0]
-  const visibleNotes = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return notes
-      .filter((note) => {
-        if (Boolean(note.archived) !== (view === 'archive')) return false
-        if (favoritesOnly && !note.favorite) return false
-        if (!normalized) return true
-        const body = note.blocks.map((block) => block.content).join(' ')
-        return `${note.title} ${body}`.toLowerCase().includes(normalized)
-      })
-      .sort((a, b) => sortOrder === 'title'
-        ? (a.title || 'Untitled note').localeCompare(b.title || 'Untitled note')
-        : b.updatedAt - a.updatedAt)
-  }, [favoritesOnly, notes, query, sortOrder, view])
+  const appPwa = useAppPwa({ storageStatus, flushWorkspace, notify: setNotice })
+  const workspaceActions = useWorkspaceActions({
+    notes,
+    activeNote,
+    prependNotes,
+    recovery: workspaceRecovery,
+    replaceUnsafeWorkspace,
+    requestPersistence: requestStoragePersistence,
+    notify: setNotice,
+  })
 
   useEffect(() => {
     if (syncedAt) setNotice('Synced changes from another tab.')
   }, [syncedAt])
-
-  useEffect(() => {
-    if (!offlineReady) return
-    setNotice('Chill Notes is ready to use offline.')
-    dismissOfflineReady()
-  }, [dismissOfflineReady, offlineReady])
-
-  useEffect(() => {
-    if (!pwa.registrationFailed) return
-    setNotice('Offline setup is unavailable right now. Your notes still save on this device.')
-  }, [pwa.registrationFailed])
-
-  useEffect(() => {
-    if (previousOnlineRef.current === pwa.online) return
-    previousOnlineRef.current = pwa.online
-    setNotice(pwa.online ? 'Back online.' : 'You’re offline — your saved notes are still available.')
-  }, [pwa.online])
-
-  useEffect(() => {
-    if (notes.length > 0 && !notes.some((note) => note.id === activeId)) setActiveId(notes[0].id)
-  }, [activeId, notes])
 
   useEffect(() => {
     const isMobile = window.matchMedia('(max-width: 700px)').matches
@@ -182,265 +142,83 @@ export default function App() {
     return () => observer.disconnect()
   }, [activeNote?.id, activeNote?.title, mode])
 
-  function updateNote(updated: Note) {
-    setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)))
-  }
-
-  function createNote() {
-    const note = blankNote()
+  const createNote = useCallback(() => {
     const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
     if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
-    setNotes((current) => [note, ...current])
-    setActiveId(note.id)
-    setView('notes')
+    createLibraryNote()
     setMode('type')
     setSidebarOpen(false)
     setNoteMenuOpen(false)
     if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
-  }
+  }, [createLibraryNote, sidebarOpen])
 
   function selectNote(id: string) {
     if (sidebarOpen && window.matchMedia('(max-width: 700px)').matches) {
       sidebarFocusIntentRef.current = 'title'
     }
-    setActiveId(id)
+    selectLibraryNote(id)
     setSidebarOpen(false)
     setNoteMenuOpen(false)
   }
 
   function showView(nextView: NoteView) {
-    const nextNote = notes.find((note) => Boolean(note.archived) === (nextView === 'archive'))
-    if (!nextNote && nextView === 'archive') {
+    if (!showLibraryView(nextView)) {
       setNotice('Archive is empty.')
       setSidebarOpen(false)
       return
     }
-    setView(nextView)
-    setQuery('')
     setSettingsOpen(false)
     setWorkspaceMenuOpen(false)
     setSidebarOpen(false)
     setNotice('')
-    if (nextNote) setActiveId(nextNote.id)
-  }
-
-  function toggleFavorite() {
-    if (!activeNote) return
-    updateNote({ ...activeNote, favorite: !activeNote.favorite, updatedAt: Date.now() })
   }
 
   function duplicateActiveNote() {
-    if (!activeNote) return
-    const duplicate: Note = {
-      ...activeNote,
-      id: crypto.randomUUID(),
-      title: activeNote.title ? `${activeNote.title} copy` : 'Untitled note copy',
-      updatedAt: Date.now(),
-      blocks: activeNote.blocks.map((block) => ({ ...block, id: crypto.randomUUID() })),
-    }
-    setNotes((current) => [duplicate, ...current])
-    setActiveId(duplicate.id)
+    if (!duplicateLibraryNote()) return
     setNoteMenuOpen(false)
   }
 
   function toggleArchive() {
-    if (!activeNote) return
-    const archived = !activeNote.archived
-    const updated = { ...activeNote, archived, updatedAt: Date.now() }
-    // Prefer the next note the user can actually see in the sidebar.
-    const nextInView = visibleNotes.find((note) => note.id !== activeNote.id)
-      ?? notes.find((note) => note.id !== activeNote.id && Boolean(note.archived) === (view === 'archive'))
-    updateNote(updated)
+    const result = toggleActiveArchive()
+    if (!result) return
     setNoteMenuOpen(false)
-
-    if (!archived) {
-      setView('notes')
+    if (result === 'restored') {
       setNotice('Note restored.')
       return
     }
     setNotice('Note archived.')
-    if (nextInView) {
-      setActiveId(nextInView.id)
-      return
-    }
-    const note = blankNote()
-    setNotes((current) => [note, ...current])
-    setActiveId(note.id)
-    setView('notes')
   }
 
   function deleteActiveNote() {
     if (!activeNote || !window.confirm('Delete this note? This cannot be undone.')) return
-    const remaining = notes.filter((note) => note.id !== activeNote.id)
-    let nextNote = visibleNotes.find((note) => note.id !== activeNote.id)
-      ?? remaining.find((note) => Boolean(note.archived) === (view === 'archive'))
-
-    if (!nextNote && view === 'archive') {
-      setView('notes')
-      nextNote = remaining.find((note) => !note.archived)
-    }
-    if (!nextNote) {
-      nextNote = blankNote()
-      remaining.unshift(nextNote)
-      setView('notes')
-    }
-
-    const deletedAt = Date.now()
-    setWorkspaceState((current) => ({
-      notes: remaining,
-      tombstones: {
-        ...current.tombstones,
-        [activeNote.id]: Math.max(current.tombstones[activeNote.id] ?? -1, deletedAt),
-      },
-    }))
-    setActiveId(nextNote.id)
+    deleteLibraryNote()
     setNoteMenuOpen(false)
   }
 
   function exportNotes() {
-    const file = new Blob([serializeNotesExport(notes)], { type: 'application/json' })
-    downloadFile(file, `chill-notes-${new Date().toISOString().slice(0, 10)}.json`)
     setWorkspaceMenuOpen(false)
-    setNotice(`Exported ${notes.length} ${notes.length === 1 ? 'note' : 'notes'} as JSON.`)
-  }
-
-  function downloadWorkspaceRecovery() {
-    if (!workspaceRecovery) return
-    const file = new Blob([workspaceRecovery.raw], { type: 'application/json;charset=utf-8' })
-    downloadFile(file, `chill-notes-indexeddb-recovery-${new Date().toISOString().slice(0, 10)}.json`)
-    setNotice('Downloaded the original IndexedDB data.')
-  }
-
-  function replaceRecoveredWorkspace() {
-    if (!workspaceRecovery) return
-    const confirmed = window.confirm(
-      'Replace the unreadable saved workspace with the workspace currently open in this tab? '
-      + 'Download the original data first if you may need it later.',
-    )
-    if (!confirmed) return
-    replaceUnsafeWorkspace()
-    setNotice('Replacing the saved workspace with the current one.')
+    workspaceActions.exportNotes()
   }
 
   function exportActiveNoteAsMarkdown() {
-    if (!activeNote) return
-    const file = new Blob([noteToMarkdown(activeNote)], { type: 'text/markdown;charset=utf-8' })
-    downloadFile(file, markdownFilename(activeNote.title))
+    if (!workspaceActions.exportActiveNoteAsMarkdown()) return
     setNoteMenuOpen(false)
-    setNotice('Exported this note as Markdown.')
   }
 
   function chooseImportFile() {
     setWorkspaceMenuOpen(false)
-    importInputRef.current?.click()
-  }
-
-  async function importNotes(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget
-    const file = input.files?.[0]
-    if (!file) return
-
-    try {
-      const result = parseImportedNotes(await file.text())
-      if (result.notes.length === 0) {
-        setNotice(result.skipped > 0 ? `No valid notes found. Skipped ${result.skipped}.` : 'No notes found to import.')
-        return
-      }
-
-      setNotes((current) => [...result.notes, ...current])
-      const noteLabel = result.notes.length === 1 ? 'note' : 'notes'
-      const skipped = result.skipped > 0 ? ` Skipped ${result.skipped}.` : ''
-      setNotice(`Imported ${result.notes.length} ${noteLabel}.${skipped}`)
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not import that file.')
-    } finally {
-      input.value = ''
-    }
+    workspaceActions.chooseImportFile()
   }
 
   async function installPwa() {
     setWorkspaceMenuOpen(false)
-    try {
-      const result = await pwa.promptInstall()
-      if (result === 'accepted') setNotice('Chill Notes is being installed.')
-      if (result === 'dismissed') setNotice('Installation cancelled. You can try again later.')
-      if (result === 'manual') setNotice('In Safari, tap Share, then “Add to Home Screen.”')
-      if (result === 'unavailable') setNotice('Install from your browser’s app menu when available.')
-    } catch {
-      setNotice('Could not open the install prompt. Try your browser’s app menu.')
-    }
+    await appPwa.install()
   }
 
   async function protectLocalStorage() {
-    const result = await requestStoragePersistence()
+    await workspaceActions.protectLocalStorage()
     setWorkspaceMenuOpen(false)
-    if (result === 'persistent') {
-      setNotice('Persistent storage enabled. Your local notes are better protected from automatic cleanup.')
-      return
-    }
-    if (result === 'denied') {
-      setNotice('This browser did not grant persistent storage. Keep downloading regular backups.')
-      return
-    }
-    if (result === 'unsupported') {
-      setNotice('Persistent storage is not supported in this browser. Keep downloading regular backups.')
-      return
-    }
-    setNotice('Could not request persistent storage. Try again from Workspace options.')
   }
-
-  const saveBeforePwaReload = useCallback(async () => {
-    const savedStatus = await Promise.race([
-      flushWorkspace(),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), UPDATE_SAVE_TIMEOUT)),
-    ])
-    if (!savedStatus) {
-      setNotice('Update paused because saving is taking longer than expected. Try again in a moment.')
-      return false
-    }
-    if (savedStatus.phase === 'error' || savedStatus.phase === 'recovery') {
-      setNotice(savedStatus.phase === 'recovery'
-        ? 'Update paused while saved data needs recovery. Download or replace it first.'
-        : 'Update paused because your latest changes are not saved. Download a backup first.')
-      return false
-    }
-    return true
-  }, [flushWorkspace])
-
-  async function updatePwa() {
-    setUpdatingPwa(true)
-    try {
-      if (storageStatus.phase === 'loading' || storageStatus.phase === 'saving') {
-        setNotice('Finishing saving before the update…')
-      }
-      if (!await saveBeforePwaReload()) {
-        setUpdatingPwa(false)
-        return
-      }
-      if (pwaReloadNeeded) {
-        reloadPwaPage()
-        return
-      }
-      await pwa.updateServiceWorker(true)
-    } catch {
-      setUpdatingPwa(false)
-      setNotice('Could not update right now. Your current version is still available.')
-    }
-  }
-
-  useEffect(() => {
-    if (!pwaReloadNeeded || pwaReloadRunningRef.current) return
-    pwaReloadRunningRef.current = true
-    setUpdatingPwa(true)
-    void saveBeforePwaReload().then((canReload) => {
-      if (canReload) {
-        reloadPwaPage()
-        return
-      }
-      pwaReloadRunningRef.current = false
-      setUpdatingPwa(false)
-    })
-  }, [pwaReloadNeeded, reloadPwaPage, saveBeforePwaReload])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -463,18 +241,9 @@ export default function App() {
       }
       if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        const note = blankNote()
-        const focusThroughSidebar = sidebarOpen && window.matchMedia('(max-width: 700px)').matches
-        if (focusThroughSidebar) sidebarFocusIntentRef.current = 'title'
-        setNotes((current) => [note, ...current])
-        setActiveId(note.id)
-        setView('notes')
-        setMode('type')
-        setSidebarOpen(false)
-        setNoteMenuOpen(false)
+        createNote()
         setWorkspaceMenuOpen(false)
         setSettingsOpen(false)
-        if (!focusThroughSidebar) requestAnimationFrame(() => titleInputRef.current?.focus())
       }
       if (event.key === 'Escape') {
         setNoteMenuOpen(false)
@@ -486,7 +255,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [setNotes, sidebarOpen])
+  }, [createNote, sidebarOpen])
 
   if (!activeNote) return null
 
@@ -501,14 +270,14 @@ export default function App() {
         usage={storageUsage}
         recovery={workspaceRecovery}
         onDownloadBackup={exportNotes}
-        onDownloadRecovery={downloadWorkspaceRecovery}
-        onReplaceWorkspace={replaceRecoveredWorkspace}
+        onDownloadRecovery={workspaceActions.downloadWorkspaceRecovery}
+        onReplaceWorkspace={workspaceActions.replaceRecoveredWorkspace}
       />
-      {pwa.needRefresh && (
+      {appPwa.needRefresh && (
         <PwaUpdateNotice
-          updating={updatingPwa}
-          onUpdate={updatePwa}
-          onDismiss={pwa.dismissUpdate}
+          updating={appPwa.updating}
+          onUpdate={appPwa.update}
+          onDismiss={appPwa.dismissUpdate}
         />
       )}
 
@@ -525,15 +294,15 @@ export default function App() {
         storageStatus={storageStatus}
         storageUsage={storageUsage}
         storagePersistence={storagePersistence}
-        pwaInstallMode={pwa.installMode}
+        pwaInstallMode={appPwa.installMode}
         themePreference={themePreference}
         searchInputRef={searchInputRef}
-        importInputRef={importInputRef}
+        importInputRef={workspaceActions.importInputRef}
         onClose={() => setSidebarOpen(false)}
         onCreateNote={createNote}
         onQueryChange={setQuery}
-        onToggleFavorites={() => setFavoritesOnly((current) => !current)}
-        onToggleSort={() => setSortOrder((current) => current === 'updated' ? 'title' : 'updated')}
+        onToggleFavorites={toggleFavoritesOnly}
+        onToggleSort={toggleSortOrder}
         onSelectNote={selectNote}
         onShowView={showView}
         onToggleSettings={() => {
@@ -552,7 +321,7 @@ export default function App() {
         onExportNotes={exportNotes}
         onRequestStoragePersistence={protectLocalStorage}
         onInstallApp={installPwa}
-        onImportNotes={importNotes}
+        onImportNotes={workspaceActions.importNotes}
       />
 
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
@@ -566,7 +335,7 @@ export default function App() {
         titleInputRef={titleInputRef}
         onModeChange={setMode}
         onToggleFocus={() => setFocusMode((current) => !current)}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={toggleActiveFavorite}
         onToggleNoteMenu={() => {
           setNoteMenuOpen((current) => !current)
           setSettingsOpen(false)
