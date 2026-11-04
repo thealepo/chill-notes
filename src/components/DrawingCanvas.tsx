@@ -7,6 +7,7 @@ import {
 import { DrawingCanvasSurface } from './DrawingCanvasSurface'
 import { DrawingSelectionToolbar, DrawingToolbar } from './DrawingControls'
 import { drawingColors, drawingTools } from './drawingControlsConfig'
+import { useDrawingCanvasRenderer } from '../hooks/useDrawingCanvasRenderer'
 import { useDrawingSceneHistory } from '../hooks/useDrawingSceneHistory'
 import {
   DRAWING_SCENE_VERSION,
@@ -46,23 +47,13 @@ import {
   panDrawingViewport,
   zoomDrawingViewport,
 } from '../lib/drawingViewport'
-import {
-  paintDrawingScene,
-  type DrawingDraft,
-  type DrawingViewport,
-} from '../lib/drawingRender'
+import type { DrawingDraft, DrawingViewport } from '../lib/drawingRender'
 import type { DrawingTool } from '../types'
 
 interface DrawingCanvasProps {
   initialDrawing?: string
   onChange: (drawing: string) => void
   noteTitle: string
-}
-
-interface CanvasSize {
-  width: number
-  height: number
-  ratio: number
 }
 
 type PointerGesture =
@@ -108,7 +99,6 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const [size, setSize] = useState(4)
   const [viewport, setViewport] = useState<DrawingViewport>(DEFAULT_DRAWING_VIEWPORT)
   const viewportRef = useRef(viewport)
-  const [canvasSize, setCanvasSize] = useState<CanvasSize>({ width: 1, height: 1, ratio: 1 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<DrawingDraft>(null)
   const draftRef = useRef<DrawingDraft>(null)
@@ -117,12 +107,9 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
   const spacePanningRef = useRef(false)
   const [editing, setEditing] = useState<TextEditingState | null>(null)
   const [keyboardStatus, setKeyboardStatus] = useState('')
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const frameRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const keyboardMoveRef = useRef<string | null>(null)
   const announcementFrameRef = useRef<number | null>(null)
-  const [imageVersion, setImageVersion] = useState(0)
   const [exporting, setExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState('')
   const keyboardInstructionsId = useId()
@@ -132,6 +119,13 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     () => scene.elements.find((element) => element.id === selectedId),
     [scene.elements, selectedId],
   )
+  const { canvasRef, frameRef, canvasSize } = useDrawingCanvasRenderer({
+    scene,
+    viewport,
+    draft,
+    selectedId,
+    editingId: editing?.id ?? null,
+  })
 
   const setLiveViewport = useCallback((next: DrawingViewport) => {
     viewportRef.current = next
@@ -161,45 +155,6 @@ export function DrawingCanvas({ initialDrawing, onChange, noteTitle }: DrawingCa
     const timeout = window.setTimeout(() => setExportStatus(''), 6_000)
     return () => window.clearTimeout(timeout)
   }, [exportStatus, exporting])
-
-  useEffect(() => {
-    const frame = frameRef.current
-    if (!frame) return
-    const prepare = () => {
-      const rect = frame.getBoundingClientRect()
-      setCanvasSize({
-        width: Math.max(1, Math.floor(rect.width)),
-        height: Math.max(1, Math.floor(rect.height)),
-        ratio: window.devicePixelRatio || 1,
-      })
-    }
-    const observer = new ResizeObserver(prepare)
-    observer.observe(frame)
-    prepare()
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.width = Math.floor(canvasSize.width * canvasSize.ratio)
-    canvas.height = Math.floor(canvasSize.height * canvasSize.ratio)
-    const context = canvas.getContext('2d')
-    if (!context) return
-    context.setTransform(canvasSize.ratio, 0, 0, canvasSize.ratio, 0, 0)
-    context.clearRect(0, 0, canvasSize.width, canvasSize.height)
-    paintDrawingScene(
-      context,
-      scene,
-      viewport,
-      canvasSize.width,
-      canvasSize.height,
-      draft,
-      selectedId,
-      editing?.id ?? null,
-      () => setImageVersion((version) => version + 1),
-    )
-  }, [canvasSize, draft, editing?.id, imageVersion, scene, selectedId, viewport])
 
   useEffect(() => {
     if (editing) requestAnimationFrame(() => textInputRef.current?.focus())
