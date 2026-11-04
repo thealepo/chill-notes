@@ -27,7 +27,6 @@
   --sidebar-glow: rgba(255, 255, 255, 0.72);
   --workspace-start: rgba(253, 249, 248, 0.72);
   --workspace-end: rgba(247, 239, 241, 0.86);
-  --workspace-glow: rgba(220, 159, 176, 0.16);
   --surface: #fffaf8;
   --surface-raised: #fffdfb;
   --surface-translucent: rgba(255, 253, 251, 0.76);
@@ -111,7 +110,6 @@
   --sidebar-glow: rgba(125, 70, 94, 0.13);
   --workspace-start: rgba(40, 28, 37, 0.84);
   --workspace-end: rgba(31, 23, 30, 0.94);
-  --workspace-glow: rgba(151, 61, 98, 0.16);
   --surface: #30222c;
   --surface-raised: #392832;
   --surface-translucent: rgba(53, 37, 47, 0.82);
@@ -603,11 +601,16 @@ textarea:focus-visible {
 }
 
 .topbar {
-  display: flex;
+  position: relative;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
-  flex: 0 0 58px;
-  padding: 0 27px;
+  flex: 0 0 54px;
+  min-height: 54px;
+  padding: 0 20px;
+  column-gap: 10px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-translucent);
   backdrop-filter: blur(14px);
@@ -654,6 +657,11 @@ textarea:focus-visible {
   color: var(--accent-text);
 }
 
+.topbar .icon-button.is-open {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
 .save-state {
   display: flex;
   align-items: center;
@@ -661,6 +669,14 @@ textarea:focus-visible {
   padding-right: 7px;
   color: var(--text-muted);
   font-size: 10px;
+}
+
+.save-state.is-error {
+  color: var(--danger);
+}
+
+.save-state.is-warning {
+  color: var(--accent-text);
 }
 
 .save-dot {
@@ -674,9 +690,7 @@ textarea:focus-visible {
 .workspace-scroll {
   flex: 1;
   overflow-y: auto;
-  background:
-    radial-gradient(circle at 88% 6%, var(--workspace-glow), transparent 25%),
-    linear-gradient(180deg, var(--workspace-start), var(--workspace-end));
+  background: linear-gradient(180deg, var(--workspace-start), var(--workspace-end));
 }
 
 .note-page {
@@ -774,7 +788,7 @@ textarea:focus-visible {
 .slash-menu button > svg { color: var(--text-muted); }
 
 /* Drawing editor */
-.draw-editor { position: relative; }
+.draw-editor { position: relative; margin-top: 22px; }
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -786,7 +800,7 @@ textarea:focus-visible {
   white-space: nowrap;
   border: 0;
 }
-.drawing-toolbar { display: flex; align-items: center; gap: 12px; padding: 9px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-translucent); box-shadow: var(--shadow-small); }
+.drawing-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 10px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-translucent); box-shadow: var(--shadow-small); }
 .tool-group { display: flex; align-items: center; gap: 3px; }
 .tool-group button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 9px; border: 0; border-radius: 8px; color: var(--text-secondary); font-size: 10px; background: transparent; cursor: pointer; }
 .tool-group button:hover:not(:disabled), .tool-group button.active { color: var(--accent-text); background: var(--accent-soft); }
@@ -798,13 +812,14 @@ textarea:focus-visible {
 .color-picker button.active { box-shadow: 0 0 0 1px var(--swatch), 0 0 0 3px var(--surface-raised); }
 .stroke-size { display: flex; align-items: center; gap: 7px; }
 .stroke-preview { flex: 0 0 auto; border-radius: 50%; background: var(--text-secondary); }
+.stroke-preview-slot { display: grid; flex: 0 0 14px; place-items: center; width: 14px; height: 14px; }
 .stroke-size input { width: 58px; accent-color: var(--accent); }
 .toolbar-spacer { flex: 1; }
 .history-tools button { width: 31px; padding: 0; }
 .history-tools .export-button { width: auto; padding: 0 10px; color: var(--text-on-accent); background: var(--accent); }
 .history-tools .export-button:hover { color: var(--text-on-accent); background: var(--accent-hover); }
 .canvas-shell { position: relative; padding: 11px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface-translucent); box-shadow: var(--shadow-medium); }
-.canvas-frame { width: 100%; height: min(58vh, 620px); min-height: 420px; overflow: hidden; border-radius: 11px; background-color: var(--drawing-paper); background-image: radial-gradient(var(--drawing-dots) 0.75px, transparent 0.75px); background-size: 18px 18px; }
+.canvas-frame { position: relative; isolation: isolate; width: 100%; height: min(58vh, 620px); min-height: 420px; overflow: hidden; border-radius: 11px; background-color: var(--drawing-paper); }
 .canvas-frame canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .canvas-corner-label { position: absolute; z-index: 2; right: 22px; top: 20px; display: flex; align-items: center; gap: 5px; color: var(--drawing-label); font-family: Georgia, serif; font-size: 9px; font-style: italic; pointer-events: none; }
 .drawing-tip { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px; color: var(--text-muted); font-family: Georgia, serif; font-size: 10px; font-style: italic; }
@@ -844,11 +859,6 @@ textarea:focus-visible {
 }
 
 /* Blank document experience */
-.topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-}
-
 .topbar-mode-switcher {
   display: flex;
   align-items: center;
@@ -889,8 +899,8 @@ textarea:focus-visible {
 }
 
 .document-column {
-  width: min(760px, calc(100% - 72px));
-  padding: 74px 28px 120px;
+  width: min(760px, calc(100% - 64px));
+  padding: 64px 28px 120px;
   margin: 0 auto;
 }
 
@@ -1011,6 +1021,10 @@ textarea:focus-visible {
   margin: 0 0 4px;
   opacity: 0.48;
   transition: opacity 150ms ease;
+}
+
+.page-customize-actions:empty {
+  display: none;
 }
 
 .document-column:hover .page-customize-actions,
@@ -1195,6 +1209,9 @@ textarea:focus-visible {
 
 .title-input {
   min-height: 58px;
+  overflow: hidden;
+  resize: none;
+  overflow-wrap: anywhere;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(38px, 5vw, 50px);
   font-weight: 720;
@@ -1206,6 +1223,7 @@ textarea:focus-visible {
 
 .notion-editor {
   margin-top: 18px;
+  margin-left: -44px;
 }
 
 .notion-editor .blocks { gap: 0; }
@@ -1233,6 +1251,15 @@ textarea:focus-visible {
   height: 2px;
   border-radius: 2px;
   background: var(--accent);
+}
+
+.notion-editor .editor-block.drop-after::before {
+  top: auto;
+  bottom: -2px;
+}
+
+.notion-editor .editor-block.is-dragging {
+  opacity: 0.4;
 }
 
 .block-gutter {
@@ -1265,12 +1292,18 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.notion-editor .block-handle[aria-expanded='true'] {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
 .notion-editor .block-handle { cursor: grab; }
 .notion-editor .block-handle:active { cursor: grabbing; }
 .notion-editor .block-handle:hover,
 .notion-editor .block-add:hover { color: #816a70; background: #eee4e6; }
 
 .notion-editor .block-content textarea {
+  max-height: none;
   min-height: 30px;
   padding: 2px 1px;
   overflow: hidden;
@@ -1362,6 +1395,10 @@ textarea:focus-visible {
 .notion-editor .kind-divider {
   min-height: 34px;
   margin: 4px 0;
+}
+
+.notion-editor .kind-divider:focus-within .notion-divider {
+  border-top-color: var(--accent-line);
 }
 
 .notion-editor .kind-divider .block-gutter { top: 4px; }
@@ -1590,6 +1627,14 @@ textarea:focus-visible {
   font-size: 14px;
 }
 
+.note-icon.has-emoji {
+  font-size: 15px;
+}
+
+.note-item.active .note-icon.has-emoji {
+  background: var(--accent-soft);
+}
+
 .note-item.active {
   box-shadow: none;
 }
@@ -1600,13 +1645,6 @@ textarea:focus-visible {
 
 .profile-card {
   margin-top: 6px;
-}
-
-.topbar {
-  flex-basis: 54px;
-  min-height: 54px;
-  padding: 0 20px;
-  background: var(--surface-translucent);
 }
 
 .topbar-mode-switcher {
@@ -1626,15 +1664,6 @@ textarea:focus-visible {
   color: var(--accent-text);
   background: var(--surface-raised);
   box-shadow: var(--shadow-small);
-}
-
-.workspace-scroll {
-  background: linear-gradient(180deg, var(--workspace-start), var(--workspace-end));
-}
-
-.document-column {
-  width: min(760px, calc(100% - 64px));
-  padding-top: 64px;
 }
 
 .page-customize-actions button {
@@ -1716,13 +1745,6 @@ textarea:focus-visible {
 }
 
 /* Expanded editable drawing board */
-.drawing-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  padding: 10px;
-}
-
 .drawing-tools {
   grid-column: 1 / -1;
   min-width: 0;
@@ -1854,11 +1876,6 @@ textarea:focus-visible {
 
 .selection-toolbar .danger-action:hover {
   color: var(--danger);
-}
-
-.canvas-frame {
-  isolation: isolate;
-  background-image: none;
 }
 
 .canvas-frame canvas {
@@ -2430,49 +2447,6 @@ button:focus:not(:focus-visible) {
   cursor: grabbing;
 }
 
-/* Layout and readability fixes */
-
-/* Keep the top bar (and its note menu) above the page cover and canvas. */
-.topbar {
-  position: relative;
-  z-index: 30;
-  column-gap: 10px;
-}
-
-.topbar .icon-button.is-open {
-  color: var(--text-primary);
-  background: var(--accent-soft);
-}
-
-.save-state.is-error {
-  color: var(--danger);
-}
-
-.save-state.is-warning {
-  color: var(--accent-text);
-}
-
-/* Title wraps instead of clipping long names. */
-textarea.title-input {
-  overflow: hidden;
-  resize: none;
-  overflow-wrap: anywhere;
-}
-
-/* Align block text with the title; the gutter controls sit in the left margin. */
-.notion-editor {
-  margin-left: -44px;
-}
-
-.draw-editor {
-  margin-top: 22px;
-}
-
-/* Hide the empty customize row once a note has both an icon and a cover. */
-.page-customize-actions:empty {
-  display: none;
-}
-
 .page-cover + .document-column:not(:has(.page-icon)) {
   padding-top: 24px;
 }
@@ -2489,37 +2463,6 @@ textarea.title-input {
   }
 }
 
-/* Long paragraphs and code must grow rather than be clipped at 300px. */
-.notion-editor .block-content textarea {
-  max-height: none;
-}
-
-.notion-editor .editor-block.drop-after::before {
-  top: auto;
-  bottom: -2px;
-}
-
-.notion-editor .editor-block.is-dragging {
-  opacity: 0.4;
-}
-
-.notion-editor .kind-divider:focus-within .notion-divider {
-  border-top-color: var(--accent-line);
-}
-
-.notion-editor .block-handle[aria-expanded='true'] {
-  color: var(--text-primary);
-  background: var(--surface-hover);
-}
-
-.note-icon.has-emoji {
-  font-size: 15px;
-}
-
-.note-item.active .note-icon.has-emoji {
-  background: var(--accent-soft);
-}
-
 .note-meta {
   display: flex;
   align-items: center;
@@ -2529,19 +2472,6 @@ textarea.title-input {
 .note-meta svg {
   flex: 0 0 auto;
   color: var(--accent-text);
-}
-
-/* Drawing canvas */
-.canvas-frame {
-  position: relative;
-}
-
-.stroke-preview-slot {
-  display: grid;
-  flex: 0 0 14px;
-  place-items: center;
-  width: 14px;
-  height: 14px;
 }
 
 /* Readability: lift the smallest UI text to legible sizes. */
